@@ -17,6 +17,9 @@ type probeResult struct {
 	codec         string
 	sampleRate    int
 	bits          int // 0 for lossy formats
+	kbps          int // lossy: bitrate (average for VBR)
+	avgKbps       int // the file's average bitrate (with tags and pictures)
+	vbr           bool
 	embeddedCover bool
 }
 
@@ -31,6 +34,7 @@ func findProgram(name string) (string, error) {
 type ffprobeOutput struct {
 	Format struct {
 		Duration string            `json:"duration"`
+		BitRate  string            `json:"bit_rate"`
 		Tags     map[string]string `json:"tags"`
 	} `json:"format"`
 	Streams []struct {
@@ -39,6 +43,7 @@ type ffprobeOutput struct {
 		SampleRate       string            `json:"sample_rate"`
 		BitsPerRawSample string            `json:"bits_per_raw_sample"`
 		BitsPerSample    int               `json:"bits_per_sample"`
+		BitRate          string            `json:"bit_rate"`
 		Tags             map[string]string `json:"tags"`
 		Disposition      struct {
 			AttachedPic int `json:"attached_pic"`
@@ -93,6 +98,16 @@ func parseProbe(data []byte) (probeResult, error) {
 			}
 			if lossless[s.CodecName] || strings.HasPrefix(s.CodecName, "pcm_") || strings.HasPrefix(s.CodecName, "dsd_") {
 				pr.bits = bits
+			} else {
+				// Lossy: the stream bitrate, else the file's average.
+				br, _ := strconv.Atoi(s.BitRate)
+				if br == 0 {
+					br, _ = strconv.Atoi(o.Format.BitRate)
+				}
+				pr.kbps = (br + 500) / 1000
+				avg, _ := strconv.Atoi(o.Format.BitRate)
+				pr.avgKbps = (avg + 500) / 1000
+				pr.vbr = s.CodecName == "opus" || s.CodecName == "vorbis" // always variable in practice
 			}
 			add(s.Tags) // Ogg/Opus keep the tags on the stream
 		case s.CodecType == "video" && s.Disposition.AttachedPic == 1:

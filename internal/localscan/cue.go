@@ -192,7 +192,7 @@ func buildCue(e entry, pr probeResult, folder, albumArtist, album, date, art str
 			ID: library.LocalTrackID(e.audio, i+1), AlbumID: albumID, Title: title, Artist: artist,
 			Number: i + 1, Duration: max(0, end-ct.start), Playable: true,
 			Path: e.audio, Folder: folder, CueTrack: i + 1, CuePath: e.path, Start: ct.start,
-			Codec: pr.codec, SampleRate: pr.sampleRate, Bits: pr.bits,
+			Codec: pr.codec, SampleRate: pr.sampleRate, Bits: pr.bits, Kbps: pr.kbps, VBR: pr.vbr,
 		})
 	}
 	return f

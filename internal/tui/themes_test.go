@@ -68,6 +68,9 @@ func TestPalettesReadable(t *testing.T) {
 		if contrast(hexSelText, hexAccent) < 1.5 {
 			t.Errorf("%s: cursor row text unreadable on the accent", p.name)
 		}
+		if c := contrast(mix(hexSelText, hexAccent, 0.5), hexAccent); c < 1.2 {
+			t.Errorf("%s: pale text on the accent bar has contrast %.2f", p.name, c)
+		}
 	}
 	ApplyTheme("no-such-theme")
 	if themeName != defaultTheme {

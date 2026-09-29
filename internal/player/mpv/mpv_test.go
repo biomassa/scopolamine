@@ -11,19 +11,6 @@ import (
 	"github.com/biomassa/scopolamine/internal/player"
 )
 
-func TestFormatLabel(t *testing.T) {
-	for _, c := range []struct {
-		codec      string
-		rate, bits int
-		want       string
-	}{{"flac", 44100, 16, "FLAC 44.1/16"}, {"alac", 96000, 24, "ALAC 96/24"}, {"mp3", 44100, 0, "MP3 44.1"},
-		{"opus", 48000, 0, "Opus 48"}, {"pcm_s24le", 88200, 24, "PCM 88.2/24"}} {
-		if got := FormatLabel(c.codec, c.rate, c.bits); got != c.want {
-			t.Errorf("FormatLabel(%s) = %q, want %q", c.codec, got, c.want)
-		}
-	}
-}
-
 func waitFor(t *testing.T, ch <-chan player.State, what string, ok func(player.State) bool) player.State {
 	t.Helper()
 	t0 := time.Now()

@@ -414,7 +414,7 @@ func localResolver(ctx context.Context, store *library.Store) func(id string) (m
 			return mpv.Item{}, err
 		}
 		it := mpv.Item{ID: t.ID, Path: t.Path, CuePath: t.CuePath, Start: t.Start, Duration: t.Duration,
-			Title: t.Title, Artist: t.Artist, Codec: t.Codec, SampleRate: t.SampleRate, Bits: t.Bits}
+			Title: t.Title, Artist: t.Artist, Codec: t.Codec, SampleRate: t.SampleRate, Bits: t.Bits, Kbps: t.Kbps, VBR: t.VBR}
 		if a, err := store.Album(ctx, t.AlbumID); err == nil {
 			it.Album, it.ArtworkURL = a.Title, a.ArtworkURL
 		}

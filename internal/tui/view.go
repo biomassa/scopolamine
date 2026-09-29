@@ -307,8 +307,15 @@ func (m *Model) renderColumn(p *pane, w, h int, focused, filtering bool, empty s
 		case c.header:
 			st = stHeader
 		}
-		if c.rightDim && !cursor && c.right != "" && ansi.StringWidth(right) < w {
-			lines = append(lines, st.Render(fit(mark+c.left, w-ansi.StringWidth(right)))+stDim.Render(right))
+		if c.rightDim && c.right != "" && ansi.StringWidth(right) < w {
+			pale := stDim
+			switch {
+			case cursor && focused:
+				pale = stSelFocusPale
+			case cursor:
+				pale = stSelPale
+			}
+			lines = append(lines, st.Render(fit(mark+c.left, w-ansi.StringWidth(right)))+pale.Render(right))
 			continue
 		}
 		lines = append(lines, st.Render(leftRight(mark+c.left, right, w)))

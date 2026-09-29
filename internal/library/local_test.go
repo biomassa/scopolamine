@@ -252,3 +252,52 @@ func TestLocalAlbumFormats(t *testing.T) {
 		t.Fatalf("apple album got a format: %+v", apple)
 	}
 }
+
+func TestFormatLabel(t *testing.T) {
+	for _, c := range []struct {
+		t    library.Track
+		want string
+	}{
+		{library.Track{Codec: "flac", SampleRate: 44100, Bits: 16}, "FLAC 44.1/16"},
+		{library.Track{Codec: "alac", SampleRate: 96000, Bits: 24}, "ALAC 96/24"},
+		{library.Track{Codec: "pcm_s24le", SampleRate: 88200, Bits: 24}, "PCM 88.2/24"},
+		{library.Track{Codec: "mp3", SampleRate: 44100, Kbps: 320}, "MP3 320"},
+		{library.Track{Codec: "mp3", SampleRate: 44100, Kbps: 245, VBR: true}, "MP3 ~245"},
+		{library.Track{Codec: "opus", SampleRate: 48000, Kbps: 128, VBR: true}, "Opus ~128"},
+		{library.Track{Codec: "vorbis", VBR: true}, "Vorbis VBR"},
+	} {
+		if got := library.FormatLabel(c.t); got != c.want {
+			t.Errorf("FormatLabel(%+v) = %q, want %q", c.t, got, c.want)
+		}
+	}
+}
+
+// VBR tracks of one album show the length-weighted average; CBR tracks with
+// different bitrates are mixed.
+func TestAlbumVBRAverage(t *testing.T) {
+	ctx := context.Background()
+	s, err := library.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	mk := func(path, album string, kbps int, vbr bool, d time.Duration) library.LocalFile {
+		f := localFile(path, "u/"+album, "X", album, 2000, path)
+		f.Tracks[0].Codec, f.Tracks[0].Bits, f.Tracks[0].Kbps, f.Tracks[0].VBR, f.Tracks[0].Duration = "mp3", 0, kbps, vbr, d
+		return f
+	}
+	if err := s.UpdateLocal(ctx, []library.LocalFile{
+		mk("/v1", "V", 200, true, 3*time.Minute), mk("/v2", "V", 300, true, time.Minute),
+		mk("/c1", "C", 320, false, time.Minute), mk("/c2", "C", 192, false, time.Minute),
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	albums, _ := s.AlbumsByArtist(ctx, library.SourceLocal, "X")
+	for _, a := range albums {
+		got[a.Title] = a.Format
+	}
+	if got["V"] != "MP3 ~225" || got["C"] != library.MixedFormat {
+		t.Fatalf("formats: %v", got)
+	}
+}

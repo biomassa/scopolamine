@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
@@ -283,11 +284,12 @@ func prefixCols(prefix, cols string) string {
 }
 
 // FormatLabel is the text for a file format, as in the status bar and the
-// album rows: "FLAC 44.1/16",
-// "MP3 44.1", "ALAC 96/24".
-func FormatLabel(codec string, rate, bits int) string {
-	name := strings.ToUpper(codec)
-	switch codec {
+// album rows. Lossless: codec, kHz, and bits ("FLAC 44.1/16", "ALAC
+// 96/24"). Lossy: codec and bitrate in kbit/s ("MP3 320"); a variable
+// bitrate is the average, with a tilde ("MP3 ~245", "Opus ~128").
+func FormatLabel(t Track) string {
+	name := strings.ToUpper(t.Codec)
+	switch t.Codec {
 	case "vorbis":
 		name = "Vorbis"
 	case "opus":
@@ -295,25 +297,34 @@ func FormatLabel(codec string, rate, bits int) string {
 	case "wavpack":
 		name = "WavPack"
 	}
-	if strings.HasPrefix(codec, "pcm_") {
+	if strings.HasPrefix(t.Codec, "pcm_") {
 		name = "PCM"
 	}
-	if rate <= 0 {
+	if t.Bits == 0 { // lossy
+		switch {
+		case t.VBR && t.Kbps > 0:
+			return name + " ~" + strconv.Itoa(t.Kbps)
+		case t.VBR:
+			return name + " VBR"
+		case t.Kbps > 0:
+			return name + " " + strconv.Itoa(t.Kbps)
+		}
 		return name
 	}
-	khz := strconv.FormatFloat(float64(rate)/1000, 'f', -1, 64)
-	if bits > 0 {
-		return fmt.Sprintf("%s %s/%d", name, khz, bits)
+	if t.SampleRate <= 0 {
+		return name
 	}
-	return name + " " + khz
+	khz := strconv.FormatFloat(float64(t.SampleRate)/1000, 'f', -1, 64)
+	return fmt.Sprintf("%s %s/%d", name, khz, t.Bits)
 }
 
 // MixedFormat is the format of an album whose tracks have different formats.
 const MixedFormat = "mixed"
 
-// fillLocalFormats sets the Format of local albums from their tracks:
-// the one format of all tracks, or MixedFormat. Folder albums group by
-// folder.
+// fillLocalFormats sets the Format of local albums from their tracks: the
+// one format of all tracks, or MixedFormat. For variable-bitrate tracks the
+// bitrate is the average over the album, weighted by track length. Folder
+// albums group by folder.
 func (s *Store) fillLocalFormats(ctx context.Context, albums []Album) error {
 	need := false
 	for _, a := range albums {
@@ -326,35 +337,61 @@ func (s *Store) fillLocalFormats(ctx context.Context, albums []Album) error {
 		return nil
 	}
 	rows, err := s.db.QueryContext(ctx, `
-SELECT t.album_id, t.folder, t.codec, t.sample_rate, t.bits
-FROM tracks t JOIN albums a ON a.id = t.album_id WHERE a.source = 'local'
-GROUP BY t.album_id, t.folder, t.codec, t.sample_rate, t.bits`)
+SELECT t.album_id, t.folder, t.codec, t.sample_rate, t.bits, t.kbps, t.vbr, t.duration_ms
+FROM tracks t JOIN albums a ON a.id = t.album_id WHERE a.source = 'local'`)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = rows.Close() }()
-	formats := map[string]string{} // album id, or FolderPrefix+folder → format
-	add := func(key, f string) {
-		switch old, ok := formats[key]; {
-		case !ok:
-			formats[key] = f
-		case old != f:
-			formats[key] = MixedFormat
+	type agg struct {
+		sig          string // the format without the VBR average
+		mixed        bool
+		first        Track
+		kbpsMs, msum int64 // for the VBR average
+	}
+	groups := map[string]*agg{} // album id, or FolderPrefix+folder
+	add := func(key string, t Track) {
+		sig := fmt.Sprintf("%s|%d|%d|%v", t.Codec, t.SampleRate, t.Bits, t.VBR)
+		if !t.VBR {
+			sig += "|" + strconv.Itoa(t.Kbps)
 		}
+		g := groups[key]
+		if g == nil {
+			g = &agg{sig: sig, first: t}
+			groups[key] = g
+		} else if g.sig != sig {
+			g.mixed = true
+		}
+		ms := max(t.Duration.Milliseconds(), 1)
+		g.kbpsMs += int64(t.Kbps) * ms
+		g.msum += ms
 	}
 	for rows.Next() {
-		var id, folder, codec string
-		var rate, bits int
-		if err := rows.Scan(&id, &folder, &codec, &rate, &bits); err != nil {
+		var id, folder string
+		var t Track
+		var ms int64
+		if err := rows.Scan(&id, &folder, &t.Codec, &t.SampleRate, &t.Bits, &t.Kbps, &t.VBR, &ms); err != nil {
 			return err
 		}
-		f := FormatLabel(codec, rate, bits)
-		add(id, f)
-		add(FolderPrefix+folder, f)
+		t.Duration = time.Duration(ms) * time.Millisecond
+		add(id, t)
+		add(FolderPrefix+folder, t)
 	}
 	for i := range albums {
-		if albums[i].Source == SourceLocal {
-			albums[i].Format = formats[albums[i].ID]
+		if albums[i].Source != SourceLocal {
+			continue
+		}
+		g := groups[albums[i].ID]
+		switch {
+		case g == nil:
+		case g.mixed:
+			albums[i].Format = MixedFormat
+		default:
+			t := g.first
+			if t.VBR && g.msum > 0 {
+				t.Kbps = int((g.kbpsMs + g.msum/2) / g.msum)
+			}
+			albums[i].Format = FormatLabel(t)
 		}
 	}
 	return rows.Err()

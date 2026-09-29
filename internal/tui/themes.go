@@ -82,6 +82,7 @@ var (
 	stTitle, stTitleFocus, stRow, stDim, stSel, stSelFocus lipgloss.Style
 	stPlaying, stSep, stErr, stBold, stHeader              lipgloss.Style
 	stLegendKey, stMuted                                   lipgloss.Style
+	stSelPale, stSelFocusPale                              lipgloss.Style // pale text on the cursor rows
 )
 
 func init() { ApplyTheme(defaultTheme) }
@@ -135,6 +136,9 @@ func buildStyles() {
 	stHeader = c(hexAccent).Bold(true)
 	stLegendKey = c(hexAccent).Bold(true)
 	stMuted = c(hexMuted)
+	stSelPale = c(hexDim).Background(lipgloss.Color(hexSelBg))
+	// On the accent bar: the bar's text color halfway to the bar color.
+	stSelFocusPale = c(mix(hexSelText, hexAccent, 0.5)).Background(lipgloss.Color(hexAccent))
 }
 
 // themeLabel is the name shown in the picker.

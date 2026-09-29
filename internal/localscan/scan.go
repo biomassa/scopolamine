@@ -193,7 +193,22 @@ func (s *Scanner) readAll(ctx context.Context, root string, todo []entry, progre
 	}
 	probe := s.probe
 	if probe == nil {
-		probe = func(ctx context.Context, path string) (probeResult, error) { return runFFprobe(ctx, s.ffprobe(), path) }
+		probe = func(ctx context.Context, path string) (probeResult, error) {
+			pr, err := runFFprobe(ctx, s.ffprobe(), path)
+			if err == nil && pr.codec == "mp3" {
+				var audioBytes int64
+				pr.vbr, audioBytes = mp3VBR(path)
+				if pr.vbr {
+					// The average of the audio: from the byte count of the
+					// VBR header, else the file's average.
+					pr.kbps = pr.avgKbps
+					if audioBytes > 0 && pr.duration > 0 {
+						pr.kbps = int((float64(audioBytes)*8/pr.duration.Seconds() + 500) / 1000)
+					}
+				}
+			}
+			return pr, err
+		}
 	}
 	out := make([]library.LocalFile, len(todo))
 	ok := make([]bool, len(todo))
@@ -296,7 +311,7 @@ func build(root string, e entry, pr probeResult) library.LocalFile {
 		Tracks: []library.Track{{
 			ID: library.LocalTrackID(e.audio, 0), AlbumID: albumID, Title: title, Artist: artist,
 			Disc: disc, Number: num, Duration: pr.duration, Playable: true,
-			Path: e.audio, Folder: folder, Codec: pr.codec, SampleRate: pr.sampleRate, Bits: pr.bits,
+			Path: e.audio, Folder: folder, Codec: pr.codec, SampleRate: pr.sampleRate, Bits: pr.bits, Kbps: pr.kbps, VBR: pr.vbr,
 		}},
 	}
 }

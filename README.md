@@ -148,7 +148,7 @@ The local library is the folder in `local_root` in `~/.config/scopolamine/config
 - A cue sheet with one audio file and two or more tracks splits the file into tracks. The file plays as one file with chapters, so the album stays gapless. Cue sheets for albums that are already split into track files are not used. scopolamine reads cue sheets as UTF-8, else as Windows-1252.
 - The cover is the picture in the audio file, else an image in the album folder: cover, folder, front, or album (.jpg or .png), else the only image in the folder.
 
-Each local album row shows the format of the album at the right, in a pale color: for example `FLAC 44.1/16` (codec, kHz, bits) or `MP3 44.1`. An album with tracks in different formats shows `mixed`.
+Each local album row shows the format of the album at the right, in a pale color. For a lossless format, it shows the codec, the sample rate in kHz, and the bits: `FLAC 44.1/16`. For a lossy format, it shows the codec and the bitrate in kbit/s: `MP3 320`. A variable bitrate shows the average with a tilde: `MP3 ~245`, and for an album it is the average of the tracks, by length. An album with tracks in different formats shows `mixed`. The status bar shows the format of the track that plays in the same way.
 
 `v` switches the sorting. With **metadata** (the default), the columns are album artists, albums, and tracks. With **folders**, the columns are the top folders, the album folders in them, and the files. The status bar shows the mode and the format of the track that plays, for example `local · metadata · FLAC 44.1/16`.
 

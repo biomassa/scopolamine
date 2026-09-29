@@ -233,3 +233,46 @@ func bump(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 }
+
+// TestMP3VBR checks the VBR header detection on MP3 files from LAME: -b 320
+// (CBR, an "Info" header) and -q:a 2 (VBR, a "Xing" header), with an ID3
+// tag in front.
+func TestMP3VBR(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not installed")
+	}
+	dir := t.TempDir()
+	enc := func(name string, rate ...string) string {
+		p := filepath.Join(dir, name)
+		args := append([]string{"-loglevel", "error", "-f", "lavfi", "-i", "anoisesrc=d=5:c=pink", "-ac", "2", "-ar", "44100",
+			"-c:a", "libmp3lame", "-metadata", "title=x"}, rate...)
+		if out, err := exec.Command("ffmpeg", append(args, p)...).CombinedOutput(); err != nil {
+			t.Fatalf("ffmpeg: %v %s", err, out)
+		}
+		return p
+	}
+	cbr := enc("cbr.mp3", "-b:a", "320k")
+	vbr := enc("vbr.mp3", "-q:a", "2")
+	if v, _ := mp3VBR(cbr); v {
+		t.Fatal("CBR file reported as VBR")
+	}
+	v, bytes := mp3VBR(vbr)
+	if !v || bytes == 0 {
+		t.Fatalf("VBR file: vbr=%v bytes=%d", v, bytes)
+	}
+
+	store, _ := library.Open(":memory:")
+	defer func() { _ = store.Close() }()
+	if _, err := (&Scanner{Root: dir}).Scan(context.Background(), store, nil); err != nil {
+		t.Fatal(err)
+	}
+	tracks, _ := store.FolderTracks(context.Background(), "")
+	labels := map[string]string{}
+	for _, tr := range tracks {
+		labels[filepath.Base(tr.Path)] = library.FormatLabel(tr)
+	}
+	if labels["cbr.mp3"] != "MP3 320" || !strings.HasPrefix(labels["vbr.mp3"], "MP3 ~") {
+		t.Fatalf("labels: %v", labels)
+	}
+	t.Logf("labels: %v", labels)
+}

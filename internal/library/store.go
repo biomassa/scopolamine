@@ -69,6 +69,8 @@ type Track struct {
 	Codec      string        // e.g. "flac"
 	SampleRate int           // Hz
 	Bits       int           // bits per sample; 0 for lossy formats
+	Kbps       int           // lossy: the bitrate in kbit/s; 0 otherwise
+	VBR        bool          // lossy: variable bitrate
 }
 
 // Store is the SQLite-backed library.
@@ -111,6 +113,8 @@ CREATE TABLE IF NOT EXISTS tracks (
 	codec       TEXT NOT NULL DEFAULT '',
 	sample_rate INTEGER NOT NULL DEFAULT 0,
 	bits        INTEGER NOT NULL DEFAULT 0,
+	kbps        INTEGER NOT NULL DEFAULT 0,
+	vbr         INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY (album_id, id)
 );
 CREATE TABLE IF NOT EXISTS local_files (
@@ -181,6 +185,8 @@ func migrate(db *sql.DB) error {
 		"codec TEXT NOT NULL DEFAULT ''",
 		"sample_rate INTEGER NOT NULL DEFAULT 0",
 		"bits INTEGER NOT NULL DEFAULT 0",
+		"kbps INTEGER NOT NULL DEFAULT 0",
+		"vbr INTEGER NOT NULL DEFAULT 0",
 	} {
 		name := col[:strings.IndexByte(col, ' ')]
 		if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('tracks') WHERE name = ?`, name).Scan(&n); err != nil {
@@ -189,6 +195,12 @@ func migrate(db *sql.DB) error {
 		if n == 0 {
 			if _, err := db.Exec(`ALTER TABLE tracks ADD COLUMN ` + col); err != nil {
 				return err
+			}
+			if name == "kbps" {
+				// Local files scanned before know no bitrate: scan them again.
+				if _, err := db.Exec(`DELETE FROM local_files`); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -477,13 +489,13 @@ WHERE album_id = ? ORDER BY disc, number, path, start_ms, title COLLATE NOCASE`,
 }
 
 const trackCols = `id, album_id, catalog_id, title, artist, disc, number, duration_ms, playable,
-path, folder, cue_track, cue_path, start_ms, codec, sample_rate, bits`
+path, folder, cue_track, cue_path, start_ms, codec, sample_rate, bits, kbps, vbr`
 
 var trackPlaceholders = strings.TrimSuffix(strings.Repeat("?,", strings.Count(trackCols, ",")+1), ",")
 
 func trackArgs(t Track) []any {
 	return []any{t.ID, t.AlbumID, t.CatalogID, t.Title, t.Artist, t.Disc, t.Number, t.Duration.Milliseconds(), t.Playable,
-		t.Path, t.Folder, t.CueTrack, t.CuePath, t.Start.Milliseconds(), t.Codec, t.SampleRate, t.Bits}
+		t.Path, t.Folder, t.CueTrack, t.CuePath, t.Start.Milliseconds(), t.Codec, t.SampleRate, t.Bits, t.Kbps, t.VBR}
 }
 
 func scanTracks(rows *sql.Rows) ([]Track, error) {
@@ -493,7 +505,7 @@ func scanTracks(rows *sql.Rows) ([]Track, error) {
 		var t Track
 		var ms, startMs int64
 		if err := rows.Scan(&t.ID, &t.AlbumID, &t.CatalogID, &t.Title, &t.Artist, &t.Disc, &t.Number, &ms, &t.Playable,
-			&t.Path, &t.Folder, &t.CueTrack, &t.CuePath, &startMs, &t.Codec, &t.SampleRate, &t.Bits); err != nil {
+			&t.Path, &t.Folder, &t.CueTrack, &t.CuePath, &startMs, &t.Codec, &t.SampleRate, &t.Bits, &t.Kbps, &t.VBR); err != nil {
 			return nil, err
 		}
 		t.Duration = time.Duration(ms) * time.Millisecond

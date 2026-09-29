@@ -40,6 +40,8 @@ type Item struct {
 	Codec      string
 	SampleRate int
 	Bits       int
+	Kbps       int
+	VBR        bool
 }
 
 // debugLog, when set (tests), receives the IPC traffic.
@@ -271,13 +273,15 @@ func (p *Player) snapshot() player.State {
 	s.Position = max(0, p.timePos-it.Start)
 	s.Track = &player.NowPlaying{ID: it.ID, Title: it.Title, Artist: it.Artist, Album: it.Album,
 		ArtworkURL: it.ArtworkURL, Duration: it.Duration}
-	s.Format = FormatLabel(it.Codec, it.SampleRate, it.Bits)
+	s.Format = formatLabel(it)
 	return s
 }
 
-// FormatLabel is the status-bar text for a file format; see
+// formatLabel is the status-bar text for the format of it; see
 // library.FormatLabel.
-func FormatLabel(codec string, rate, bits int) string { return library.FormatLabel(codec, rate, bits) }
+func formatLabel(it Item) string {
+	return library.FormatLabel(library.Track{Codec: it.Codec, SampleRate: it.SampleRate, Bits: it.Bits, Kbps: it.Kbps, VBR: it.VBR})
+}
 
 func (p *Player) notice(n player.State) {
 	p.mu.Lock()
