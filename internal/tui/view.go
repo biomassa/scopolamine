@@ -150,9 +150,7 @@ func (m *Model) render() string {
 		return m.renderSearch()
 	}
 	sep := stSep.Render("│")
-	w0 := max(12, m.width*22/100)
-	w1 := max(16, m.width*36/100)
-	w2 := m.width - w0 - w1 - 2
+	w0, w1, w2 := m.columnWidths()
 	widths := [numPanes]int{w0, w1, w2}
 	h := m.listHeight()
 
@@ -312,6 +310,9 @@ func (m *Model) renderPane(i, w, h int) []string {
 		nums := trackNumbers(m.tracks)
 		grouped := strings.HasPrefix(m.tracksFor, artistKeyPrefix)
 		cellAt = func(idx int) cell { return m.trackCell(m.trackRows, m.tracks, nums, grouped, idx) }
+		return m.withCover(w, h, func(h int) []string {
+			return m.renderColumn(p, w, h, focused, m.filtering, empty, cellAt)
+		})
 	}
 	return m.renderColumn(p, w, h, focused, m.filtering, empty, cellAt)
 }

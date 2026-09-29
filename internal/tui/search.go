@@ -625,10 +625,8 @@ func (m *Model) renderSearch() string {
 	b.WriteByte('\n')
 
 	sep := stSep.Render("│")
-	w0 := max(12, m.width*22/100)
-	w1 := max(16, m.width*36/100)
-	w2 := m.width - w0 - w1 - 2
-	h := m.listHeight() - 1
+	w0, w1, w2 := m.columnWidths()
+	h := m.columnHeight()
 	focusOf := func(i int) bool { return !s.editing && s.focus == i }
 
 	artists := m.renderColumn(s.panes[paneArtists], w0, h, focusOf(paneArtists), false, "", func(idx int) cell {
@@ -672,8 +670,10 @@ func (m *Model) renderSearch() string {
 		tracksEmpty = "loading…"
 	}
 	nums := trackNumbers(s.tracks)
-	tracks := m.renderColumn(s.panes[paneTracks], w2, h, focusOf(paneTracks), false, tracksEmpty, func(idx int) cell {
-		return m.trackCell(s.trackRows, s.tracks, nums, false, idx)
+	tracks := m.withCover(w2, h, func(h int) []string {
+		return m.renderColumn(s.panes[paneTracks], w2, h, focusOf(paneTracks), false, tracksEmpty, func(idx int) cell {
+			return m.trackCell(s.trackRows, s.tracks, nums, false, idx)
+		})
 	})
 
 	for row := 0; row < h+1; row++ {

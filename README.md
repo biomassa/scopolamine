@@ -11,6 +11,7 @@ scopolamine is a terminal program for [Apple Music](https://music.apple.com) on 
 - Three columns: artists, albums, and tracks. Each column starts with an "All" row. "All albums" shows all the tracks of an artist, grouped by album.
 - Albums in date order, and track numbers on all tracks.
 - Full albums play as one queue, so that the tracks follow each other without a new start for each track.
+- Album covers at the bottom of the track column, in kitty and Ghostty.
 - A filter for each column (`/`).
 - A search of the Apple Music catalog (`s`), with the discography of each artist. A mark shows the albums that are in your library. You can play an album from the search, add it to your library (`a`), or remove it (`D`).
 - Tracks that are not available in your country show as "unavailable". Playback skips them.
@@ -26,7 +27,7 @@ See the [changelog](CHANGELOG.md) for more details.
 - An Apple Music subscription.
 - Go 1.27 or later, to build from the source.
 - About 140 MB of disk space for a private copy of Google Chrome. scopolamine downloads it at the first start.
-- A terminal with true color.
+- A terminal with true color. For album covers: kitty or Ghostty.
 - PipeWire or PulseAudio for the audio output.
 
 ## Installation
@@ -125,6 +126,12 @@ The search uses the catalog of your country only.
 - In the track column, `D` removes the album of the selected row.
 - `D` does not remove "All albums" or an artist.
 
+### Album covers
+
+In kitty and Ghostty, the track column shows the cover of the selected album at the bottom right. When "All albums" is selected, there is no cover. scopolamine uses the kitty graphics protocol with Unicode placeholders. It downloads each cover one time and keeps a copy in `~/.cache/scopolamine/art/`.
+
+The cover uses at most half of the column height. When the window is too small, scopolamine shows no cover. In tmux and screen, scopolamine shows no covers. `SCOPOLAMINE_COVERS=0` turns the covers off. `SCOPOLAMINE_COVERS=1` turns them on in a different terminal that supports the protocol.
+
 ### Unavailable tracks
 
 Some albums in a library are not available in the country of the account. Usually the label did not license the album for that country, or the album is no longer in the catalog. Apple does not supply a stream for these tracks. scopolamine shows them as "unavailable" and skips them. The Apple Music apps show them in gray for the same reason.
@@ -148,6 +155,7 @@ scopolamine puts the full album into one MusicKit queue. MusicKit then goes to t
 | `~/.cache/scopolamine/session.json` | The resume data. |
 | `~/.cache/scopolamine/webplayer-token.json` | The web player token. |
 | `~/.cache/scopolamine/player.log` | The player log of the last run. |
+| `~/.cache/scopolamine/art/` | The album covers. |
 | `~/.cache/scopolamine/chrome/` | The private copy of Google Chrome. |
 
 `SCOPOLAMINE_CHROME_PATH` or `CHROME_PATH` selects a different Chrome or Chromium. It must have the Widevine module.
@@ -163,6 +171,7 @@ internal/applemusic  Apple Music API client: library, catalog, add, remove
 internal/library     SQLite library cache
 internal/player      player interface; cdp: Apple Music in headless Chrome
 internal/mpris       MPRIS2 D-Bus server
+internal/cover       album covers: kitty graphics protocol
 internal/tui         terminal user interface
 ```
 

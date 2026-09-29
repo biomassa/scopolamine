@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/biomassa/scopolamine/internal/cover"
 	"github.com/biomassa/scopolamine/internal/library"
 	"github.com/biomassa/scopolamine/internal/player"
 )
@@ -43,6 +44,8 @@ type Deps struct {
 	Catalog Catalog
 	// Version is shown on the help screen.
 	Version string
+	// Covers shows album covers in the tracks column (nil: no covers).
+	Covers *cover.Manager
 }
 
 // Messages sent in from outside (see cmd/scopolamine).
@@ -139,6 +142,9 @@ type Model struct {
 
 	confirm  *confirmation
 	removing map[string]bool // library album ids being removed
+
+	cover        *coverView
+	coverLoading map[string]bool
 }
 
 type pendingPlay struct {
@@ -253,9 +259,25 @@ func (m *Model) flash(msg string, isErr bool) tea.Cmd {
 // --- update ---------------------------------------------------------------
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	_, cmd := m.update(msg)
+	if c := m.syncCover(); c != nil {
+		cmd = tea.Batch(cmd, c)
+	}
+	return m, cmd
+}
+
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		if m.deps.Covers != nil {
+			// The cell size changes with the font size.
+			m.deps.Covers.CellW, m.deps.Covers.CellH = cover.CellSize()
+		}
+		return m, nil
+
+	case coverLoadedMsg:
+		delete(m.coverLoading, msg.url)
 		return m, nil
 
 	case tea.KeyPressMsg:

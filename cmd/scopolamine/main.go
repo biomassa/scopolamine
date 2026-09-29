@@ -18,6 +18,7 @@ import (
 	"github.com/biomassa/scopolamine/internal/applemusic"
 	"github.com/biomassa/scopolamine/internal/auth"
 	"github.com/biomassa/scopolamine/internal/config"
+	"github.com/biomassa/scopolamine/internal/cover"
 	"github.com/biomassa/scopolamine/internal/devtoken"
 	"github.com/biomassa/scopolamine/internal/library"
 	"github.com/biomassa/scopolamine/internal/mpris"
@@ -251,6 +252,10 @@ func runTUI(ctx context.Context, offline bool) error {
 		deps.AutoSync = time.Since(store.LastSync(ctx, library.SourceApple)) > 12*time.Hour
 	}
 
+	if cover.Supported() {
+		cw, ch := cover.CellSize()
+		deps.Covers = cover.New(filepath.Join(config.CacheDir(), "art"), cw, ch)
+	}
 	model := tui.New(ctx, deps)
 	prog := tea.NewProgram(model, tea.WithContext(ctx))
 
@@ -286,6 +291,9 @@ func runTUI(ctx context.Context, offline bool) error {
 	}
 
 	_, runErr := prog.Run()
+	if deps.Covers != nil {
+		_, _ = os.Stdout.WriteString(deps.Covers.Cleanup()) // free the images in the terminal
+	}
 
 	mu.Lock()
 	stopped = true
