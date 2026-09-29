@@ -27,6 +27,8 @@ type State struct {
 	Position    time.Duration
 	Volume      float64 // 0..1
 	BitrateKbps int     // 0 = unknown
+	Format      string  // e.g. "AAC 256" or "FLAC 44.1/16"; "" = unknown
+	Local       bool    // the local-file engine plays (not Apple Music)
 	QueueIndex  int     // -1 when idle
 	QueueLength int
 	Track       *NowPlaying

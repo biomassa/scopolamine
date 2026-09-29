@@ -136,7 +136,7 @@ func TestScanReal(t *testing.T) {
 	a, tr = byArtist("Cue Artist")
 	if a.Title != "Cue Album" || a.Year != 1999 || len(tr) != 3 || tr[1].Title != "Two" || tr[1].CueTrack != 2 ||
 		tr[1].Start != 10*time.Second || tr[2].Duration < 9*time.Second || tr[2].Duration > 11*time.Second ||
-		tr[0].Path != filepath.Join(root, "userC", "Cue Album", "image.flac") {
+		tr[0].Path != filepath.Join(root, "userC", "Cue Album", "image.flac") || tr[0].CuePath != filepath.Join(root, "userC", "Cue Album", "image.cue") {
 		t.Fatalf("cue album: %+v %+v", a, tr)
 	}
 

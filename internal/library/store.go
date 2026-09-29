@@ -63,6 +63,7 @@ type Track struct {
 	Path       string        // audio file
 	Folder     string        // album folder, relative to the library root
 	CueTrack   int           // cue track: its number in the cue sheet (chapter CueTrack-1); 0 otherwise
+	CuePath    string        // cue track: the cue sheet, which mpv plays as one file with chapters
 	Start      time.Duration // cue track: start in the file
 	Codec      string        // e.g. "flac"
 	SampleRate int           // Hz
@@ -104,6 +105,7 @@ CREATE TABLE IF NOT EXISTS tracks (
 	path        TEXT NOT NULL DEFAULT '',
 	folder      TEXT NOT NULL DEFAULT '',
 	cue_track   INTEGER NOT NULL DEFAULT 0,
+	cue_path    TEXT NOT NULL DEFAULT '',
 	start_ms    INTEGER NOT NULL DEFAULT 0,
 	codec       TEXT NOT NULL DEFAULT '',
 	sample_rate INTEGER NOT NULL DEFAULT 0,
@@ -173,6 +175,7 @@ func migrate(db *sql.DB) error {
 		"path TEXT NOT NULL DEFAULT ''",
 		"folder TEXT NOT NULL DEFAULT ''",
 		"cue_track INTEGER NOT NULL DEFAULT 0",
+		"cue_path TEXT NOT NULL DEFAULT ''",
 		"start_ms INTEGER NOT NULL DEFAULT 0",
 		"codec TEXT NOT NULL DEFAULT ''",
 		"sample_rate INTEGER NOT NULL DEFAULT 0",
@@ -467,11 +470,13 @@ WHERE album_id = ? ORDER BY disc, number, path, start_ms, title COLLATE NOCASE`,
 }
 
 const trackCols = `id, album_id, catalog_id, title, artist, disc, number, duration_ms, playable,
-path, folder, cue_track, start_ms, codec, sample_rate, bits`
+path, folder, cue_track, cue_path, start_ms, codec, sample_rate, bits`
+
+var trackPlaceholders = strings.TrimSuffix(strings.Repeat("?,", strings.Count(trackCols, ",")+1), ",")
 
 func trackArgs(t Track) []any {
 	return []any{t.ID, t.AlbumID, t.CatalogID, t.Title, t.Artist, t.Disc, t.Number, t.Duration.Milliseconds(), t.Playable,
-		t.Path, t.Folder, t.CueTrack, t.Start.Milliseconds(), t.Codec, t.SampleRate, t.Bits}
+		t.Path, t.Folder, t.CueTrack, t.CuePath, t.Start.Milliseconds(), t.Codec, t.SampleRate, t.Bits}
 }
 
 func scanTracks(rows *sql.Rows) ([]Track, error) {
@@ -481,7 +486,7 @@ func scanTracks(rows *sql.Rows) ([]Track, error) {
 		var t Track
 		var ms, startMs int64
 		if err := rows.Scan(&t.ID, &t.AlbumID, &t.CatalogID, &t.Title, &t.Artist, &t.Disc, &t.Number, &ms, &t.Playable,
-			&t.Path, &t.Folder, &t.CueTrack, &startMs, &t.Codec, &t.SampleRate, &t.Bits); err != nil {
+			&t.Path, &t.Folder, &t.CueTrack, &t.CuePath, &startMs, &t.Codec, &t.SampleRate, &t.Bits); err != nil {
 			return nil, err
 		}
 		t.Duration = time.Duration(ms) * time.Millisecond
@@ -502,7 +507,7 @@ func (s *Store) SetTracks(ctx context.Context, albumID string, tracks []Track) e
 		return err
 	}
 	ins, err := tx.PrepareContext(ctx, `INSERT OR REPLACE INTO tracks
-(`+trackCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+(`+trackCols+`) VALUES (`+trackPlaceholders+`)`)
 	if err != nil {
 		return err
 	}

@@ -104,7 +104,7 @@ func (s *Store) UpdateLocal(ctx context.Context, changed []LocalFile, removed []
 	if err != nil {
 		return err
 	}
-	insTrack, err := tx.PrepareContext(ctx, `INSERT OR REPLACE INTO tracks (`+trackCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+	insTrack, err := tx.PrepareContext(ctx, `INSERT OR REPLACE INTO tracks (`+trackCols+`) VALUES (`+trackPlaceholders+`)`)
 	if err != nil {
 		return err
 	}
