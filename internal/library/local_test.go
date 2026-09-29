@@ -185,7 +185,8 @@ func TestLocalSortIgnoresCase(t *testing.T) {
 	for _, a := range tops {
 		names = append(names, a.Name)
 	}
-	if got := join(names); got != "awesome52,bare foot,BernardMarieKoltes,CaptainJam,Ärger" {
+	// Dictionary order: Ärger sorts with the A names (A-r before A-w).
+	if got := join(names); got != "Ärger,awesome52,bare foot,BernardMarieKoltes,CaptainJam" {
 		t.Fatalf("top folders: %s", got)
 	}
 	dirs, _ := s.FolderAlbums(ctx, "awesome52")

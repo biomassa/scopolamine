@@ -9,6 +9,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+
+	"golang.org/x/text/collate"
+	"golang.org/x/text/language"
 )
 
 // FolderPrefix marks folder-mode album ids: FolderPrefix + the album folder
@@ -236,15 +240,25 @@ FROM tracks t JOIN albums a ON a.id = t.album_id WHERE a.source = 'local' AND t.
 	return ts[0], nil
 }
 
-// foldLess orders strings without regard to case (full Unicode case
-// folding); strings that differ only in case keep a fixed order.
+// foldLess orders strings in dictionary order without regard to case: Ä
+// sorts with A, and "bare foot" before "BernardMarieKoltes". Strings that
+// compare equal keep a fixed order.
 func foldLess(a, b string) bool {
-	fa, fb := strings.ToLower(a), strings.ToLower(b)
-	if fa != fb {
-		return fa < fb
+	collMu.Lock()
+	c := coll.CompareString(a, b)
+	collMu.Unlock()
+	if c != 0 {
+		return c < 0
 	}
 	return a < b
 }
+
+// coll is the root (language-neutral) collation, case ignored. A Collator
+// is not safe for concurrent use.
+var (
+	collMu sync.Mutex
+	coll   = collate.New(language.Und, collate.IgnoreCase)
+)
 
 func prefixCols(prefix, cols string) string {
 	parts := strings.Split(cols, ",")

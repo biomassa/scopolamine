@@ -195,12 +195,15 @@ func migrate(db *sql.DB) error {
 // Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }
 
+// variousKey is the ArtistKey of compilations; it sorts last.
+const variousKey = "\uffff"
+
 // ArtistKey normalises an album artist for grouping and sorting: case-folded,
 // leading "The " dropped, compilations collapsed onto VariousArtists.
 func ArtistKey(name string) string {
 	k := strings.ToLower(strings.TrimSpace(name))
 	if isVarious(k) {
-		return "￿" // sorts compilations last
+		return variousKey // sorts compilations last
 	}
 	k = strings.TrimPrefix(k, "the ")
 	return k
@@ -338,6 +341,14 @@ SELECT MIN(artist), COUNT(*) FROM albums WHERE source = ? GROUP BY artist_key OR
 		}
 		out = append(out, a)
 	}
+	// Dictionary order of the keys; compilations stay last.
+	sort.SliceStable(out, func(i, j int) bool {
+		ki, kj := ArtistKey(out[i].Name), ArtistKey(out[j].Name)
+		if (ki == variousKey) != (kj == variousKey) {
+			return kj == variousKey
+		}
+		return foldLess(ki, kj)
+	})
 	return out, rows.Err()
 }
 
@@ -396,7 +407,10 @@ ORDER BY artist_key, CASE WHEN year = 0 THEN 1 ELSE 0 END, year, title COLLATE N
 	sort.SliceStable(albums, func(i, j int) bool {
 		ki, kj := ArtistKey(albums[i].Artist), ArtistKey(albums[j].Artist)
 		if ki != kj {
-			return ki < kj
+			if (ki == variousKey) != (kj == variousKey) {
+				return kj == variousKey
+			}
+			return foldLess(ki, kj)
 		}
 		return albumLess(albums[i], albums[j])
 	})
