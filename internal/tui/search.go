@@ -657,7 +657,7 @@ func (m *Model) renderSearch() string {
 		case a.LibraryID != "":
 			c.right = "✓ in library"
 		case a.Single:
-			c.right, c.dim = "single", !c.playing
+			c.right, c.rightDim = "single", true // only the tag is pale
 		}
 		return c
 	})

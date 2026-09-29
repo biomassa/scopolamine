@@ -35,7 +35,7 @@ func (f *fakeCatalog) Search(_ context.Context, term string) (applemusic.SearchR
 func (f *fakeCatalog) ArtistAlbums(context.Context, string) ([]applemusic.CatalogAlbum, error) {
 	return []applemusic.CatalogAlbum{
 		{Album: applemusic.Album{ID: "100", Title: "Plume", Artist: "Loscil", ReleaseDate: "2006-05-22"}, LibraryID: "l.p"},
-		{Album: applemusic.Album{ID: "200", Title: "Submers", Artist: "Loscil", ReleaseDate: "2002-01-01"}},
+		{Album: applemusic.Album{ID: "200", Title: "Submers", Artist: "Loscil", ReleaseDate: "2002-01-01"}, Single: true},
 	}, nil
 }
 
@@ -89,6 +89,14 @@ func TestSearch(t *testing.T) {
 	}
 	if strings.Index(s, "2002  Submers") > strings.Index(s, "2006  Plume") {
 		t.Fatal("discography not oldest first")
+	}
+	// A single: the title in the normal color, only the "single" tag pale.
+	raw := m.View().Content
+	// (Submers has the cursor of the unfocused column, so its tag uses the
+	// pale cursor-row style.)
+	paleTag := strings.Contains(raw, stDim.Render(" single ")) || strings.Contains(raw, stSelPale.Render(" single "))
+	if !strings.Contains(s, "single") || strings.Contains(raw, stDim.Render("  2002  Submers")) || !paleTag {
+		t.Fatalf("single row style wrong:\n%s", s)
 	}
 
 	// Albums column: Submers (first), enter plays it and moves to Tracks.

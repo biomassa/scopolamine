@@ -7,6 +7,10 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Changed
+
+- In the search, singles show in the normal color; only the `single` tag at the right is pale.
+
 ## [0.3.0] - 2026-09-29
 
 ### Added
