@@ -148,6 +148,8 @@ The local library is the folder in `local_root` in `~/.config/scopolamine/config
 - A cue sheet with one audio file and two or more tracks splits the file into tracks. The file plays as one file with chapters, so the album stays gapless. Cue sheets for albums that are already split into track files are not used. scopolamine reads cue sheets as UTF-8, else as Windows-1252.
 - The cover is the picture in the audio file, else an image in the album folder: cover, folder, front, or album (.jpg or .png), else the only image in the folder.
 
+Each local album row shows the format of the album at the right, in a pale color: for example `FLAC 44.1/16` (codec, kHz, bits) or `MP3 44.1`. An album with tracks in different formats shows `mixed`.
+
 `v` switches the sorting. With **metadata** (the default), the columns are album artists, albums, and tracks. With **folders**, the columns are the top folders, the album folders in them, and the files. The status bar shows the mode and the format of the track that plays, for example `local · metadata · FLAC 44.1/16`.
 
 The local player is mpv, which scopolamine controls through its IPC socket. mpv runs without your mpv configuration and without scripts. It plays gapless and applies the album ReplayGain (the track ReplayGain when the album has none). The volume is the same for both modes.

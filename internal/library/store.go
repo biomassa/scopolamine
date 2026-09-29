@@ -45,6 +45,7 @@ type Album struct {
 	TrackCount  int
 	Genre       string
 	ArtworkURL  string
+	Format      string // local albums: FormatLabel of its tracks, or MixedFormat
 }
 
 // Track is one song of an album.
@@ -380,8 +381,11 @@ ORDER BY CASE WHEN year = 0 THEN 1 ELSE 0 END, year, release_date, title COLLATE
 		return nil, err
 	}
 	albums, err := scanAlbums(rows)
+	if err != nil {
+		return nil, err
+	}
 	sort.SliceStable(albums, func(i, j int) bool { return albumLess(albums[i], albums[j]) })
-	return albums, err
+	return albums, s.fillLocalFormats(ctx, albums)
 }
 
 // albumLess orders albums oldest first (undated last), then by release date
@@ -417,7 +421,10 @@ ORDER BY artist_key, CASE WHEN year = 0 THEN 1 ELSE 0 END, year, title COLLATE N
 		}
 		return albumLess(albums[i], albums[j])
 	})
-	return albums, err
+	if err != nil {
+		return nil, err
+	}
+	return albums, s.fillLocalFormats(ctx, albums)
 }
 
 // Album fetches one album.

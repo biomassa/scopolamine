@@ -211,7 +211,11 @@ GROUP BY t.folder ORDER BY lower(t.folder)`
 	sort.SliceStable(out, func(i, j int) bool {
 		return foldLess(strings.TrimPrefix(out[i].ID, FolderPrefix), strings.TrimPrefix(out[j].ID, FolderPrefix))
 	})
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	_ = rows.Close()
+	return out, s.fillLocalFormats(ctx, out)
 }
 
 // FolderTracks lists the tracks of an album folder in file order (folder
@@ -276,4 +280,82 @@ func prefixCols(prefix, cols string) string {
 		parts[i] = prefix + strings.TrimSpace(p)
 	}
 	return strings.Join(parts, ", ")
+}
+
+// FormatLabel is the text for a file format, as in the status bar and the
+// album rows: "FLAC 44.1/16",
+// "MP3 44.1", "ALAC 96/24".
+func FormatLabel(codec string, rate, bits int) string {
+	name := strings.ToUpper(codec)
+	switch codec {
+	case "vorbis":
+		name = "Vorbis"
+	case "opus":
+		name = "Opus"
+	case "wavpack":
+		name = "WavPack"
+	}
+	if strings.HasPrefix(codec, "pcm_") {
+		name = "PCM"
+	}
+	if rate <= 0 {
+		return name
+	}
+	khz := strconv.FormatFloat(float64(rate)/1000, 'f', -1, 64)
+	if bits > 0 {
+		return fmt.Sprintf("%s %s/%d", name, khz, bits)
+	}
+	return name + " " + khz
+}
+
+// MixedFormat is the format of an album whose tracks have different formats.
+const MixedFormat = "mixed"
+
+// fillLocalFormats sets the Format of local albums from their tracks:
+// the one format of all tracks, or MixedFormat. Folder albums group by
+// folder.
+func (s *Store) fillLocalFormats(ctx context.Context, albums []Album) error {
+	need := false
+	for _, a := range albums {
+		if a.Source == SourceLocal {
+			need = true
+			break
+		}
+	}
+	if !need {
+		return nil
+	}
+	rows, err := s.db.QueryContext(ctx, `
+SELECT t.album_id, t.folder, t.codec, t.sample_rate, t.bits
+FROM tracks t JOIN albums a ON a.id = t.album_id WHERE a.source = 'local'
+GROUP BY t.album_id, t.folder, t.codec, t.sample_rate, t.bits`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	formats := map[string]string{} // album id, or FolderPrefix+folder → format
+	add := func(key, f string) {
+		switch old, ok := formats[key]; {
+		case !ok:
+			formats[key] = f
+		case old != f:
+			formats[key] = MixedFormat
+		}
+	}
+	for rows.Next() {
+		var id, folder, codec string
+		var rate, bits int
+		if err := rows.Scan(&id, &folder, &codec, &rate, &bits); err != nil {
+			return err
+		}
+		f := FormatLabel(codec, rate, bits)
+		add(id, f)
+		add(FolderPrefix+folder, f)
+	}
+	for i := range albums {
+		if albums[i].Source == SourceLocal {
+			albums[i].Format = formats[albums[i].ID]
+		}
+	}
+	return rows.Err()
 }

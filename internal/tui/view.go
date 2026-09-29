@@ -254,6 +254,7 @@ type cell struct {
 	paused      bool // with playing: ‖ instead of ▶
 	header      bool
 	dim         bool
+	rightDim    bool // the right text is pale (unless the row has the cursor)
 }
 
 // renderColumn returns h+1 lines (title + h rows) of p, each exactly w cells.
@@ -291,12 +292,13 @@ func (m *Model) renderColumn(p *pane, w, h int, focused, filtering bool, empty s
 				mark = "‖ "
 			}
 		}
-		text := leftRight(mark+c.left, " "+c.right+" ", w)
+		right := " " + c.right + " "
 		st := stRow
+		cursor := mi == p.cursor
 		switch {
-		case mi == p.cursor && focused:
+		case cursor && focused:
 			st = stSelFocus
-		case mi == p.cursor:
+		case cursor:
 			st = stSel
 		case c.playing:
 			st = stPlaying
@@ -305,7 +307,11 @@ func (m *Model) renderColumn(p *pane, w, h int, focused, filtering bool, empty s
 		case c.header:
 			st = stHeader
 		}
-		lines = append(lines, st.Render(text))
+		if c.rightDim && !cursor && c.right != "" && ansi.StringWidth(right) < w {
+			lines = append(lines, st.Render(fit(mark+c.left, w-ansi.StringWidth(right)))+stDim.Render(right))
+			continue
+		}
+		lines = append(lines, st.Render(leftRight(mark+c.left, right, w)))
 	}
 	return lines
 }
@@ -372,7 +378,8 @@ func (m *Model) renderPane(i, w, h int) []string {
 			if idx == 0 {
 				return cell{left: p.labels[0], right: strconv.Itoa(len(m.albums))}
 			}
-			return cell{left: p.labels[idx], playing: m.albums[idx-1].ID == m.playingAlbum.ID}
+			a := m.albums[idx-1]
+			return cell{left: p.labels[idx], right: a.Format, rightDim: true, playing: a.ID == m.playingAlbum.ID}
 		}
 	case paneTracks:
 		switch {

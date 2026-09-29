@@ -63,6 +63,18 @@ func TestLocalMode(t *testing.T) {
 		t.Fatalf("apple items in the local view:\n%s", s)
 	}
 
+	// Album rows show their format at the right; the Apple rows have none.
+	key(m, "j") // Polwechsel
+	for _, l := range strings.Split(screen(m), "\n") {
+		if strings.Contains(l, "2023  Embrace") {
+			seg := l[:strings.LastIndex(l, "│")]
+			if !strings.HasSuffix(strings.TrimRight(seg, " "), "FLAC 44.1/16") {
+				t.Fatalf("format not right-aligned in the album column: %q", l)
+			}
+		}
+	}
+	key(m, "k")
+
 	// Play the local album Embrace.
 	key(m, "j") // Polwechsel
 	key(m, "tab")

@@ -217,3 +217,38 @@ func join(s []string) string {
 	}
 	return out
 }
+
+func TestLocalAlbumFormats(t *testing.T) {
+	ctx := context.Background()
+	s, err := library.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	a1 := localFile("/m/u/Same/1.flac", "u/Same", "X", "Same", 2000, "a")
+	a2 := localFile("/m/u/Same/2.flac", "u/Same", "X", "Same", 2000, "b")
+	m1 := localFile("/m/u/Mixed/1.flac", "u/Mixed", "X", "Mixed", 2001, "c")
+	m2 := localFile("/m/u/Mixed/2.mp3", "u/Mixed", "X", "Mixed", 2001, "d")
+	m2.Tracks[0].Codec, m2.Tracks[0].Bits = "mp3", 0
+	if err := s.UpdateLocal(ctx, []library.LocalFile{a1, a2, m1, m2}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReplaceAlbums(ctx, library.SourceApple, []library.Album{{ID: "l.x", Title: "Apple", Artist: "X"}}); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	albums, _ := s.AlbumsByArtist(ctx, library.SourceLocal, "X")
+	for _, a := range albums {
+		got[a.Title] = a.Format
+	}
+	if got["Same"] != "FLAC 44.1/16" || got["Mixed"] != library.MixedFormat {
+		t.Fatalf("formats: %v", got)
+	}
+	dirs, _ := s.FolderAlbums(ctx, "u")
+	if len(dirs) != 2 || dirs[0].Format != library.MixedFormat || dirs[1].Format != "FLAC 44.1/16" {
+		t.Fatalf("folder formats: %+v", dirs)
+	}
+	if apple, _ := s.AlbumsByArtist(ctx, library.SourceApple, "X"); len(apple) != 1 || apple[0].Format != "" {
+		t.Fatalf("apple album got a format: %+v", apple)
+	}
+}

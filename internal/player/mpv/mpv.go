@@ -19,10 +19,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
+	"github.com/biomassa/scopolamine/internal/library"
 	"github.com/biomassa/scopolamine/internal/player"
 )
 
@@ -275,30 +275,9 @@ func (p *Player) snapshot() player.State {
 	return s
 }
 
-// FormatLabel is the status-bar text for a file format: "FLAC 44.1/16",
-// "MP3 44.1", "ALAC 96/24".
-func FormatLabel(codec string, rate, bits int) string {
-	name := strings.ToUpper(codec)
-	switch codec {
-	case "vorbis":
-		name = "Vorbis"
-	case "opus":
-		name = "Opus"
-	case "wavpack":
-		name = "WavPack"
-	}
-	if strings.HasPrefix(codec, "pcm_") {
-		name = "PCM"
-	}
-	if rate <= 0 {
-		return name
-	}
-	khz := strconv.FormatFloat(float64(rate)/1000, 'f', -1, 64)
-	if bits > 0 {
-		return fmt.Sprintf("%s %s/%d", name, khz, bits)
-	}
-	return name + " " + khz
-}
+// FormatLabel is the status-bar text for a file format; see
+// library.FormatLabel.
+func FormatLabel(codec string, rate, bits int) string { return library.FormatLabel(codec, rate, bits) }
 
 func (p *Player) notice(n player.State) {
 	p.mu.Lock()
