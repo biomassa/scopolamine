@@ -12,6 +12,10 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - In the search, singles show in the normal color; only the `single` tag at the right is pale.
 - `]` and `[` go to the next and the previous track; the legends show `[ ] track`. `n` `p` and `>` `<` still work.
 
+### Fixed
+
+- scopolamine stopped with the panic "strings: negative Repeat count" when MusicKit reported a negative position during a change of tracks. The position is now never less than zero.
+
 ## [0.3.0] - 2026-09-29
 
 ### Added

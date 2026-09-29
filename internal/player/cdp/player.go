@@ -205,7 +205,8 @@ func (p *Player) apply(js jsState) {
 	s.Playing = js.IsPlaying
 	// MusicKit PlaybackStates: 1 loading, 7 waiting, 8 stalled.
 	s.Loading = js.PlaybackState == 1 || js.PlaybackState == 7 || js.PlaybackState == 8
-	s.Position = time.Duration(js.CurrentTime * float64(time.Second))
+	// MusicKit can report a negative time while it changes tracks.
+	s.Position = max(0, time.Duration(js.CurrentTime*float64(time.Second)))
 	s.Volume = js.Volume
 	s.BitrateKbps = js.Bitrate
 	s.Format = "AAC 256" // the maximum of MusicKit JS, which scopolamine always asks for

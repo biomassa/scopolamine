@@ -500,7 +500,7 @@ func (m *Model) renderBar() string {
 	barW := max(0, w-lipgloss.Width(left)-lipgloss.Width(right))
 	filled := 0
 	if dur > 0 {
-		filled = int(float64(barW) * min(1, float64(s.Position)/float64(dur)))
+		filled = int(float64(barW) * min(1, max(0, float64(s.Position)/float64(dur))))
 	}
 	bar := stPlaying.Render(strings.Repeat("━", filled)) + stSep.Render(strings.Repeat("─", barW-filled))
 	b.WriteString(fit(left+bar+stDim.Render(right), w))

@@ -487,3 +487,15 @@ func TestPinnedAllRow(t *testing.T) {
 		t.Fatal("cursor cannot reach the pinned All row")
 	}
 }
+
+// A negative position (MusicKit, while it changes tracks) must not break
+// the progress bar.
+func TestNegativePosition(t *testing.T) {
+	m := New(context.Background(), Deps{Store: fixtureStore(t), Player: &fakePlayer{}})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
+	drive(m, m.Init())
+	playing(m, "i.a1", "Ready Lets Go", -30*time.Second)
+	if s := screen(m); !strings.Contains(s, " 0:00  ") {
+		t.Fatalf("progress line:\n%s", s)
+	}
+}
