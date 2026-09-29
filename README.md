@@ -4,19 +4,6 @@ scopolamine is a terminal program for [Apple Music](https://music.apple.com) on 
 
 > This software was developed with the assistance of a LLM.
 
-```
- Artists              3 │ Albums                              3 │ Tracks                                    6
-  All artists           │  All albums                         2 │  All                               3 · 7:38
-▶ Boards of Canada    2 │  1998  Music Has the Right to Child…  │  1998  Music Has the Right to Children
-  Broadcast           1 │▶ 2002  Geogaddi                       │    1. Wildlife Analysis                1:17
-                        │                                       │▶ 2002  Geogaddi
-                        │                                       │    1. Ready Lets Go                    1:00
-                        │                                       │▶   2. Music Is Math                    5:21
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────
- ▶ Music Is Math  ·  Boards of Canada  ·  Geogaddi  2/2
- 1:40  ━━━━━━━━━━━━━━━━━━━━━━━━──────────────────────────────────────────────────────  5:21  AAC 256  vol 80%
-```
-
 ## Features
 
 - Three columns: artists, albums, and tracks. Each column starts with an "All" row. "All albums" shows all the tracks of an artist, grouped by album.
@@ -149,30 +136,6 @@ When you quit, scopolamine saves the selected artist, album, and track, the colu
 On Linux, Apple Music streams are only available through MusicKit JS in a browser with the Widevine DRM module. That path gives a maximum of 256 kbps AAC. scopolamine always asks for the highest bitrate. Chrome decrypts and decodes the stream and sends it to PipeWire or PulseAudio. Apple supplies lossless and Hi-Res audio only to its own apps.
 
 scopolamine puts the full album into one MusicKit queue. MusicKit then goes to the next track on the same media element. vibez measured this method at 20–40 ms between tracks, and a new queue for each track at 450–1000 ms. These measurements are for queues of catalog and library tracks. The queue of library tracks that scopolamine uses is not measured.
-
-## Developer token
-
-The Apple Music API needs two tokens:
-
-- The **user token** identifies your account. `scopolamine login` gets it.
-- The **developer token** identifies the app. It is a JWT that an Apple Developer account signs.
-
-scopolamine tries these sources in this sequence:
-
-1. The `SCOPOLAMINE_DEV_TOKEN` environment variable.
-2. `developer_token` in `~/.config/scopolamine/config.json`.
-3. The token of the music.apple.com web player. This is the default.
-
-scopolamine reads the web player token from the JavaScript of music.apple.com at run time. This repository does not contain the token. scopolamine keeps a copy in `~/.cache/scopolamine/webplayer-token.json` and gets the token again 7 days before it expires.
-
-This token is a credential of Apple, not of scopolamine. Apple can change it or the website at any time. Then scopolamine can stop working until an update. The token accepts only requests from apple.com. For this reason:
-
-- The API requests send `Origin: https://music.apple.com`.
-- The MusicKit page in the headless Chrome has an address on music.apple.com. Playwright request interception supplies the page.
-- The sign-in uses the music.apple.com website in a Chrome window.
-- The removal of albums uses the API host of the web player (`amp-api.music.apple.com`). The public API has no request to remove library items.
-
-With your own developer token (source 1 or 2), the sign-in uses your default browser, and the MusicKit page uses localhost.
 
 ## Files
 
