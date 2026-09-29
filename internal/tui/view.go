@@ -14,26 +14,6 @@ import (
 	"github.com/biomassa/scopolamine/internal/player"
 )
 
-var (
-	colAccent = lipgloss.Color("#d7af5f")
-	colDim    = lipgloss.Color("#6c6c6c")
-	colFg     = lipgloss.Color("#d0d0d0")
-	colSelBg  = lipgloss.Color("#3a3a3a")
-	colErr    = lipgloss.Color("#e06c75")
-
-	stTitle      = lipgloss.NewStyle().Foreground(colDim).Bold(true)
-	stTitleFocus = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
-	stRow        = lipgloss.NewStyle().Foreground(colFg)
-	stDim        = lipgloss.NewStyle().Foreground(colDim)
-	stSel        = lipgloss.NewStyle().Foreground(colFg).Background(colSelBg)
-	stSelFocus   = lipgloss.NewStyle().Foreground(lipgloss.Color("#1c1c1c")).Background(colAccent).Bold(true)
-	stPlaying    = lipgloss.NewStyle().Foreground(colAccent)
-	stSep        = lipgloss.NewStyle().Foreground(lipgloss.Color("#444444"))
-	stErr        = lipgloss.NewStyle().Foreground(colErr)
-	stBold       = lipgloss.NewStyle().Foreground(colFg).Bold(true)
-	stHeader     = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
-)
-
 // barHeight is the now-playing area: separator, track line, progress line,
 // status/notice line.
 const barHeight = 4
@@ -130,8 +110,16 @@ func leftRight(l, r string, w int) string {
 // --- view -----------------------------------------------------------------
 
 func (m *Model) View() tea.View {
-	v := tea.NewView(m.render())
+	screen := m.render()
+	if m.themes != nil {
+		box, w := m.themeBox()
+		screen = overlay(screen, box, max(0, m.width-w-1), 1)
+	}
+	v := tea.NewView(screen)
 	v.AltScreen = true
+	if themeBg != "" { // a palette theme sets the terminal background while scopolamine runs
+		v.BackgroundColor = lipgloss.Color(themeBg)
+	}
 	v.WindowTitle = "scopolamine"
 	if t := m.state.Track; t != nil && m.state.Playing {
 		v.WindowTitle = t.Title + " — " + t.Artist + " · scopolamine"
@@ -397,9 +385,9 @@ func (m *Model) renderBar() string {
 	case m.filtering:
 		status = stDim.Render(" type to filter · enter play · esc clear")
 	case m.mode == modeSearch:
-		status = stDim.Render(" enter play · a add · D remove · s edit search · esc library · space pause · ←/→ seek · +/- vol · ? help")
+		status = stDim.Render(" enter play · a add · D remove · s edit search · esc library · space pause · ←/→ seek · +/- vol · T theme · ? help")
 	default:
-		status = stDim.Render(" enter play · space pause · n/p track · ←/→ seek · +/- vol · / filter · s search · D remove · o playing · ? help")
+		status = stDim.Render(" enter play · space pause · n/p track · ←/→ seek · +/- vol · / filter · s search · D remove · o playing · T theme · ? help")
 	}
 	b.WriteString(fit(status, w))
 	return b.String()
@@ -425,6 +413,7 @@ func (m *Model) renderHelp() string {
 		{"s", "search Apple Music (esc returns to the library)"},
 		{"a", "in search: add the album to your library"},
 		{"D", "remove the album from your library (asks first)"},
+		{"T", "choose a color theme (live preview, enter keeps it)"},
 		{"q  ctrl+c", "quit"},
 	}
 	var b strings.Builder

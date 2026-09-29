@@ -26,6 +26,8 @@ type Config struct {
 	AuthPort int `json:"auth_port,omitempty"`
 	// Volume is the last used volume, 0..1.
 	Volume float64 `json:"volume,omitempty"`
+	// Theme is the color theme (see the theme picker, T).
+	Theme string `json:"theme,omitempty"`
 
 	path string
 }

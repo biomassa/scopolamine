@@ -12,6 +12,7 @@ scopolamine is a terminal program for [Apple Music](https://music.apple.com) on 
 - Albums in date order, and track numbers on all tracks.
 - Full albums play as one queue, so that the tracks follow each other without a new start for each track.
 - Album covers at the bottom of the track column, in kitty and Ghostty.
+- 20 color themes with a live preview (`T`), as in godoist.
 - A filter for each column (`/`).
 - A search of the Apple Music catalog (`s`), with the discography of each artist. A mark shows the albums that are in your library. You can play an album from the search, add it to your library (`a`), or remove it (`D`).
 - Tracks that are not available in your country show as "unavailable". Playback skips them.
@@ -73,6 +74,7 @@ To sign in with a different account, use `scopolamine logout` and then `scopolam
 |---|---|
 | `scopolamine` | Start the TUI. |
 | `scopolamine --offline` | Browse the cache. No player and no sync. |
+| `scopolamine --theme NAME` | Use a color theme for this run only. |
 | `scopolamine login` | Sign in to Apple Music. |
 | `scopolamine logout` | Remove the saved user token. |
 | `scopolamine sync` | Sync the album list and show the progress. |
@@ -100,6 +102,7 @@ To sign in with a different account, use `scopolamine logout` and then `scopolam
 | `s` | Search Apple Music. |
 | `D` | Remove the album from your library. scopolamine asks first. |
 | `R` | Sync the album list again. |
+| `T` | Choose a color theme. |
 | `?` | Show the help and the version. |
 | `q` | Quit. |
 
@@ -134,6 +137,14 @@ In kitty and Ghostty, the track column shows the cover of the selected album at 
 
 The cover uses at most half of the column height. When the window is too small, scopolamine shows no cover. In tmux and screen, scopolamine shows no covers. `SCOPOLAMINE_COVERS=0` turns the covers off. `SCOPOLAMINE_COVERS=1` turns them on in a different terminal that supports the protocol.
 
+### Themes
+
+Push `T` to open the theme picker at the top right of the screen. When you move through the list with `↑` / `↓`, the whole screen shows the highlighted theme. `enter` keeps the theme and saves it as `theme` in `~/.config/scopolamine/config.json`. `esc` goes back to the theme that you had.
+
+The first theme, `scopolamine`, uses the scopolamine colors on the background of your terminal. The other themes set the terminal background while scopolamine runs: catppuccin-mocha, catppuccin-latte, catppuccin-frappe, catppuccin-macchiato, nord, dracula, gruvbox-dark, gruvbox-light, tokyo-night, tokyo-night-day, rose-pine, rose-pine-moon, rose-pine-dawn, one-dark, magenta-geode, coral-sunset, lavender-fields-forever, vt100, and vt52. The playing row, the progress bar, and the focused titles use the accent color of the theme.
+
+To use a theme for one run only, start scopolamine with `--theme NAME`. The theme palettes come from [tideui](https://github.com/allisonhere/tideui) by Allie Bayless (MIT license).
+
 ### Unavailable tracks
 
 Some albums in a library are not available in the country of the account. Usually the label did not license the album for that country, or the album is no longer in the catalog. Apple does not supply a stream for these tracks. scopolamine shows them as "unavailable" and skips them. The Apple Music apps show them in gray for the same reason.
@@ -152,7 +163,7 @@ scopolamine puts the full album into one MusicKit queue. MusicKit then goes to t
 
 | Path | Contents |
 |---|---|
-| `~/.config/scopolamine/config.json` | The user token, the volume, and other settings. Mode 0600. |
+| `~/.config/scopolamine/config.json` | The user token, the volume, the theme, and other settings. Mode 0600. |
 | `~/.cache/scopolamine/library.db` | The library cache (SQLite). |
 | `~/.cache/scopolamine/session.json` | The resume data. |
 | `~/.cache/scopolamine/webplayer-token.json` | The web player token. |
@@ -188,6 +199,8 @@ scopolamine uses [Semantic Versioning](https://semver.org). Before version 1.0.0
 [MIT](LICENSE).
 
 Parts of the code come from [vibez](https://github.com/simonepelosi/vibez) by Simone Pelosi, under the MIT license: the sign-in, the Chrome and Widevine playback bridge, the Chrome download, and the MPRIS server. [NOTICE](NOTICE) lists these parts, and [third_party/vibez/LICENSE](third_party/vibez/LICENSE) has the license of vibez.
+
+The theme palettes come from [tideui](https://github.com/allisonhere/tideui) by Allie Bayless, under the MIT license. [third_party/tideui/LICENSE](third_party/tideui/LICENSE) has the license of tideui.
 
 The binary contains third-party Go modules under the MIT, BSD, and Apache 2.0 licenses. [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) has their license texts. `scripts/third-party-licenses.sh` makes that file again after a dependency change.
 

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -31,7 +32,7 @@ const version = "0.2.0"
 const usage = `scopolamine — Apple Music library browser for the terminal
 
 Usage:
-  scopolamine [--offline]   start the TUI
+  scopolamine [--offline] [--theme NAME]   start the TUI
   scopolamine login         sign in to Apple Music in your browser
   scopolamine logout        forget the Apple Music user token
   scopolamine sync          refresh the album list from Apple Music
@@ -46,6 +47,7 @@ func main() {
 	flag.Usage = func() { fmt.Fprintf(os.Stderr, usage, config.DefaultPath()) }
 	offline := flag.Bool("offline", false, "browse the cached library without starting the player or syncing")
 	showVersion := flag.Bool("version", false, "print the version and exit")
+	themeFlag := flag.String("theme", "", "use a color theme for this run only (see the picker, T)")
 	flag.Parse()
 	if *showVersion {
 		fmt.Println("scopolamine", version)
@@ -55,10 +57,15 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if *themeFlag != "" && !tui.ValidTheme(*themeFlag) {
+		fmt.Fprintf(os.Stderr, "scopolamine: unknown theme %q; themes: %s\n", *themeFlag, strings.Join(tui.ThemeNames(), ", "))
+		os.Exit(2)
+	}
+
 	var err error
 	switch cmd := flag.Arg(0); cmd {
 	case "":
-		err = runTUI(ctx, *offline)
+		err = runTUI(ctx, *offline, *themeFlag)
 	case "login":
 		err = cmdLogin(ctx)
 	case "logout":
@@ -224,7 +231,7 @@ func cmdSync(ctx context.Context) error {
 	return nil
 }
 
-func runTUI(ctx context.Context, offline bool) error {
+func runTUI(ctx context.Context, offline bool, themeOverride string) error {
 	cfg, err := config.Load("")
 	if err != nil {
 		return err
@@ -235,8 +242,21 @@ func runTUI(ctx context.Context, offline bool) error {
 	}
 	defer func() { _ = store.Close() }()
 
+	theme := cfg.Theme
+	if themeOverride != "" {
+		theme = themeOverride
+	}
+	tui.ApplyTheme(theme)
+
 	sessionPath := filepath.Join(config.CacheDir(), "session.json")
 	deps := tui.Deps{Store: store, Volume: cfg.Volume, Resume: tui.LoadSession(sessionPath), Version: version}
+	var cfgMu sync.Mutex
+	deps.SaveTheme = func(name string) error {
+		cfgMu.Lock()
+		defer cfgMu.Unlock()
+		cfg.Theme = name
+		return cfg.Save()
+	}
 	var dt devtoken.Token
 	if !offline {
 		if dt, err = devToken(ctx, cfg); err != nil {

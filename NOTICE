@@ -18,6 +18,10 @@ These parts are derived from vibez:
 
 Each file that is derived from vibez has a header that says so.
 
+The color palettes of the themes (internal/tui/themes.go) come from tideui
+(https://github.com/allisonhere/tideui), Copyright (c) 2026 Allie Bayless.
+The MIT License applies to them. See third_party/tideui/LICENSE.
+
 The scopolamine binary contains third-party Go modules. THIRD_PARTY_LICENSES.md
 gives their license texts. scripts/third-party-licenses.sh makes that file
 again after a dependency change.

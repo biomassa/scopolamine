@@ -46,6 +46,8 @@ type Deps struct {
 	Version string
 	// Covers shows album covers in the tracks column (nil: no covers).
 	Covers *cover.Manager
+	// SaveTheme saves the theme that the picker keeps (nil: not saved).
+	SaveTheme func(name string) error
 }
 
 // Messages sent in from outside (see cmd/scopolamine).
@@ -145,6 +147,8 @@ type Model struct {
 
 	cover        *coverView
 	coverLoading map[string]bool
+
+	themes *themePicker // the open theme picker, or nil
 }
 
 type pendingPlay struct {
@@ -348,6 +352,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case removedMsg:
 		return m, m.onRemoved(msg)
+
+	case themeSavedMsg:
+		return m, m.onThemeSaved(msg)
 
 	case searchDebounceMsg, searchResultMsg, searchAlbumsLoadMsg, searchAlbumsMsg,
 		searchTracksLoadMsg, searchTracksMsg, addedMsg:
@@ -703,6 +710,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	if k == "ctrl+c" {
 		return tea.Quit
 	}
+	if m.themes != nil {
+		return m.handleThemeKey(k)
+	}
 	if c := m.confirm; c != nil {
 		m.confirm = nil
 		if k == "y" || k == "Y" {
@@ -832,6 +842,9 @@ func (m *Model) playbackKey(k string) (tea.Cmd, bool) {
 		return m.volumeBy(-0.05), true
 	case "o":
 		return m.jumpToPlaying(), true
+	case "T":
+		m.openThemePicker()
+		return nil, true
 	}
 	return nil, false
 }
