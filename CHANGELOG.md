@@ -9,6 +9,12 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
+- A local library mode for the music files in a folder: `local_root` in the config file, or `~/Music`. `L` switches between Apple Music and the local library. Each mode keeps its selection, and the music plays on when you switch. `v` sorts the local library by metadata (album artists, albums, tracks; the default) or by folders (top folders, album folders, files). The status bar shows the mode and the format of the track that plays, for example `local · metadata · FLAC 44.1/16`.
+- The local player is mpv, through its IPC socket: gapless playback, album ReplayGain, no user configuration and no scripts. The volume is the same for both modes.
+- The local scan reads new and changed files with ffprobe: tags, length, codec, sample rate, and bit depth. Missing tags come from the folder names. A cue sheet that splits one audio file into tracks gives separate tracks, played gapless as chapters of the file. The scan runs at the start, after `R`, and 3 seconds after files in the folder change.
+- Local covers: the picture in the audio file, else an image in the album folder.
+- Resume for each mode: the session keeps the selection and the last track and position of both modes, and the mode that showed. `enter` on the resume track of a mode continues at the saved position.
+- Chrome and MusicKit start only when the Apple Music view shows for the first time.
 - Color themes, as in godoist. `T` opens a theme picker: a move previews the theme on the whole screen, `enter` keeps it and saves it as `theme` in `~/.config/scopolamine/config.json`, and `esc` goes back. The themes are `scopolamine` (the scopolamine colors on the terminal background, the default) and 19 palettes from tideui. They set the terminal background while scopolamine runs. `--theme NAME` selects a theme for one run. The legends show `T theme`.
 - A Makefile. `make` builds scopolamine and copies the binary to `~/.local/bin`. `make BINDIR=/other/dir` selects a different directory, and `make test` runs the tests.
 

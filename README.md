@@ -1,6 +1,6 @@
 # scopolamine
 
-scopolamine is a terminal program for [Apple Music](https://music.apple.com) on Linux, in Go. It shows your library as three columns: artists, albums, and tracks. It plays full albums. It has no radio, no recommendations, and no playlists.
+scopolamine is a terminal program for [Apple Music](https://music.apple.com) and local music files on Linux, in Go. It shows your library as three columns: artists, albums, and tracks. It plays full albums. It has no radio, no recommendations, and no playlists.
 
 > This software was developed with the assistance of a LLM.
 
@@ -14,9 +14,10 @@ scopolamine is a terminal program for [Apple Music](https://music.apple.com) on 
 - Album covers at the bottom of the track column, in kitty and Ghostty.
 - 20 color themes with a live preview (`T`), as in godoist.
 - A filter for each column (`/`).
+- A local library mode (`L`) for the music files in a folder, sorted by metadata or by folders (`v`), played gapless with mpv.
 - A search of the Apple Music catalog (`s`), with the discography of each artist. A mark shows the albums that are in your library. You can play an album from the search, add it to your library (`a`), or remove it (`D`).
 - Tracks that are not available in your country show as "unavailable". Playback skips them.
-- Resume: at the next start, scopolamine shows the artist, album, and track of the last session. `space` continues the last track at the same position.
+- Resume: at the next start, scopolamine shows the artist, album, and track of the last session, for each mode. `space` continues the last track at the same position.
 - A local library cache in SQLite. The program starts at once and syncs in the background.
 - Media keys and desktop media widgets through MPRIS.
 
@@ -30,6 +31,7 @@ See the [changelog](CHANGELOG.md) for more details.
 - About 140 MB of disk space for a private copy of Google Chrome. scopolamine downloads it at the first start.
 - A terminal with true color. For album covers: kitty or Ghostty.
 - PipeWire or PulseAudio for the audio output.
+- For the local library: mpv and FFmpeg (ffprobe and ffmpeg).
 
 ## Installation
 
@@ -92,16 +94,18 @@ To sign in with a different account, use `scopolamine logout` and then `scopolam
 | `j` `k`, `↓` `↑` | Move the cursor. |
 | `g` `G`, `pgup` `pgdn` | Go to the top, the bottom, or one half page. |
 | `/` | Filter the column. `esc` clears the filter. |
-| `enter` | On an artist: go to the albums. On an album: play it and go to the tracks. On a track: play from this track. |
+| `enter` | On an artist: go to the albums. On an album: play it and go to the tracks. On a track: play from this track. On the resume track of a mode: continue at the saved position. |
 | `space` | Play or pause. After a restart: continue the last track. |
 | `←` `→` | Seek 10 seconds back or forward. `shift` seeks 60 seconds. `,` and `.` also work. |
 | `n` `p` | Play the next or the previous track. |
 | `+` `-` | Change the volume. |
 | `x` | Stop. |
 | `o` | Go to the album that plays. |
-| `s` | Search Apple Music. |
-| `D` | Remove the album from your library. scopolamine asks first. |
-| `R` | Sync the album list again. |
+| `L` | Switch between Apple Music and the local library. |
+| `v` | Local library: sort by metadata or by folders. |
+| `s` | Search Apple Music. Not in the local library. |
+| `D` | Remove the album from your Apple Music library. scopolamine asks first. Not in the local library. |
+| `R` | Sync the Apple Music album list, or scan the local folder. |
 | `T` | Choose a color theme. |
 | `?` | Show the help and the version. |
 | `q` | Quit. |
@@ -131,9 +135,28 @@ The search uses the catalog of your country only.
 - In the track column, `D` removes the album of the selected row.
 - `D` does not remove "All albums" or an artist.
 
+### Local library
+
+`L` switches between Apple Music and the local library. Each mode keeps its selection, its column, and its sorting. The music plays on when you switch. When you start music in the other mode, the music of the first mode stops. The first mode keeps its track and position: with the cursor on that track, `enter` continues at the position.
+
+The local library is the folder in `local_root` in `~/.config/scopolamine/config.json`. If `local_root` is empty, it is `$XDG_MUSIC_DIR`, else `~/Music`. scopolamine never writes to your music files.
+
+- scopolamine scans the folder at each start, after `R`, and 3 seconds after files in the folder change. The scan reads only new and changed files, with ffprobe: the tags, the length, the codec, the sample rate, and the bit depth.
+- All file types that mpv plays count as audio: FLAC, MP3, M4A (AAC and ALAC), Ogg, Opus, WAV, AIFF, WavPack, APE, DSF, and others.
+- When tags are missing, scopolamine uses the folder names. The album artist is the folder above the album folder, the album is the album folder, and the title is the file name.
+- One album is the album artist, the album title, and the album folder. So discs in different folders stay different albums.
+- A cue sheet with one audio file and two or more tracks splits the file into tracks. The file plays as one file with chapters, so the album stays gapless. Cue sheets for albums that are already split into track files are not used. scopolamine reads cue sheets as UTF-8, else as Windows-1252.
+- The cover is the picture in the audio file, else an image in the album folder: cover, folder, front, or album (.jpg or .png), else the only image in the folder.
+
+`v` switches the sorting. With **metadata** (the default), the columns are album artists, albums, and tracks. With **folders**, the columns are the top folders, the album folders in them, and the files. The status bar shows the mode and the format of the track that plays, for example `local · metadata · FLAC 44.1/16`.
+
+The local player is mpv, which scopolamine controls through its IPC socket. mpv runs without your mpv configuration and without scripts. It plays gapless and applies the album ReplayGain (the track ReplayGain when the album has none). The volume is the same for both modes.
+
+In the local library, `s` and `D` do nothing. Chrome and MusicKit start only when the Apple Music view shows for the first time.
+
 ### Album covers
 
-In kitty and Ghostty, the track column shows the cover of the selected album at the bottom right. When "All albums" is selected, there is no cover. scopolamine uses the kitty graphics protocol with Unicode placeholders. It downloads each cover one time and keeps a copy in `~/.cache/scopolamine/art/`.
+In kitty and Ghostty, the track column shows the cover of the selected album at the bottom right. When "All albums" is selected, there is no cover. scopolamine uses the kitty graphics protocol with Unicode placeholders. It gets each cover one time and keeps a copy in `~/.cache/scopolamine/art/`.
 
 The cover uses at most half of the column height. When the window is too small, scopolamine shows no cover. In tmux and screen, scopolamine shows no covers. `SCOPOLAMINE_COVERS=0` turns the covers off. `SCOPOLAMINE_COVERS=1` turns them on in a different terminal that supports the protocol.
 
@@ -151,7 +174,7 @@ Some albums in a library are not available in the country of the account. Usuall
 
 ### Resume
 
-When you quit, scopolamine saves the selected artist, album, and track, the column, and the playback position. At the next start, it selects the same items. It does not start the playback. The status bar shows the last track with "space resumes".
+When you quit, scopolamine saves, for each mode, the selected artist, album, and track, the column, the sorting, and the playback position. It also saves the mode that shows. At the next start, it shows that mode with the same items. It does not start the playback. When nothing plays, the status bar shows the last track of the mode with "space resumes".
 
 ## Audio quality
 
@@ -163,9 +186,9 @@ scopolamine puts the full album into one MusicKit queue. MusicKit then goes to t
 
 | Path | Contents |
 |---|---|
-| `~/.config/scopolamine/config.json` | The user token, the volume, the theme, and other settings. Mode 0600. |
+| `~/.config/scopolamine/config.json` | The user token, the volume, the theme, the local library folder (`local_root`), and other settings. Mode 0600. |
 | `~/.cache/scopolamine/library.db` | The library cache (SQLite). |
-| `~/.cache/scopolamine/session.json` | The resume data. |
+| `~/.cache/scopolamine/session.json` | The resume data of both modes. |
 | `~/.cache/scopolamine/webplayer-token.json` | The web player token. |
 | `~/.cache/scopolamine/player.log` | The player log of the last run. |
 | `~/.cache/scopolamine/art/` | The album covers. |
@@ -182,13 +205,13 @@ internal/devtoken    developer token sources
 internal/auth        sign-in page for your own developer token
 internal/applemusic  Apple Music API client: library, catalog, add, remove
 internal/library     SQLite library cache
-internal/player      player interface; cdp: Apple Music in headless Chrome
+internal/localscan   local folder scan: ffprobe, cue sheets, folder watch
+internal/player      player interface; cdp: Apple Music in headless Chrome;
+                     mpv: local files; router: one player for both
 internal/mpris       MPRIS2 D-Bus server
 internal/cover       album covers: kitty graphics protocol
 internal/tui         terminal user interface
 ```
-
-The library cache has a source column for each album. A later version can add local files and a libmpv player behind the same player interface.
 
 ## Versions
 
