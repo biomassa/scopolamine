@@ -88,8 +88,11 @@ func (s *Store) UpdateLocal(ctx context.Context, changed []LocalFile, removed []
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// forget drops the tracks of a scan entry: an audio file's own track, or
+	// a cue sheet's tracks (whose path is the audio file, and cue_path the
+	// sheet).
 	forget := func(path string) error {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM tracks WHERE path = ? AND album_id IN (SELECT id FROM albums WHERE source = ?)`, path, SourceLocal); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM tracks WHERE (path = ? OR cue_path = ?) AND album_id IN (SELECT id FROM albums WHERE source = ?)`, path, path, SourceLocal); err != nil {
 			return err
 		}
 		_, err := tx.ExecContext(ctx, `DELETE FROM local_files WHERE path = ?`, path)
@@ -177,7 +180,8 @@ GROUP BY top ORDER BY lower(top)`)
 // cover and the year come from its tracks' albums.
 func (s *Store) FolderAlbums(ctx context.Context, top string) ([]Album, error) {
 	q := `
-SELECT t.folder, MIN(a.year), MAX(a.artwork_url), COUNT(*)
+SELECT t.folder, MIN(a.year),
+	COALESCE(MAX(CASE WHEN a.artwork_url LIKE 'embedded:%' THEN a.artwork_url END), MAX(a.artwork_url)), COUNT(*)
 FROM tracks t JOIN albums a ON a.id = t.album_id
 WHERE a.source = 'local' AND (? = '' OR t.folder = ? OR t.folder LIKE ? ESCAPE '\')
 GROUP BY t.folder ORDER BY lower(t.folder)`

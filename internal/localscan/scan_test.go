@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -140,6 +141,49 @@ func TestScanReal(t *testing.T) {
 		t.Fatalf("cue album: %+v %+v", a, tr)
 	}
 
+	// A changed cue TITLE: one album with the new title, no old cue tracks.
+	cuePath := filepath.Join(root, "userC", "Cue Album", "image.cue")
+	cueText, _ := os.ReadFile(cuePath)
+	write(t, cuePath, []byte(strings.Replace(string(cueText), `TITLE "Cue Album"`, `TITLE "Renamed Album"`, 1)))
+	bump(t, cuePath)
+	if _, err := sc.Scan(ctx, store, nil); err != nil {
+		t.Fatal(err)
+	}
+	if albums, _ := store.AlbumsByArtist(ctx, library.SourceLocal, "Cue Artist"); len(albums) != 1 || albums[0].Title != "Renamed Album" || albums[0].TrackCount != 3 {
+		t.Fatalf("after cue edit: %+v", albums)
+	}
+	// The cue sheet removed: the file is one plain track again, no cue tracks.
+	if err := os.Remove(cuePath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sc.Scan(ctx, store, nil); err != nil {
+		t.Fatal(err)
+	}
+	if albums, _ := store.AlbumsByArtist(ctx, library.SourceLocal, "Cue Artist"); len(albums) != 0 {
+		t.Fatalf("cue album still there: %+v", albums)
+	}
+	plain, _ := store.FolderTracks(ctx, "userC/Cue Album")
+	if len(plain) != 1 || plain[0].CueTrack != 0 || plain[0].Title != "image" {
+		t.Fatalf("after cue removal: %+v", plain)
+	}
+	// A cue sheet again, then its audio file removed: nothing stays.
+	write(t, cuePath, cueText)
+	if _, err := sc.Scan(ctx, store, nil); err != nil {
+		t.Fatal(err)
+	}
+	if tr, _ := store.FolderTracks(ctx, "userC/Cue Album"); len(tr) != 3 {
+		t.Fatalf("cue tracks not back: %+v", tr)
+	}
+	if err := os.Remove(filepath.Join(root, "userC", "Cue Album", "image.flac")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sc.Scan(ctx, store, nil); err != nil {
+		t.Fatal(err)
+	}
+	if tr, _ := store.FolderTracks(ctx, "userC/Cue Album"); len(tr) != 0 {
+		t.Fatalf("tracks of a removed file stay: %+v", tr)
+	}
+
 	// No change → nothing read; a removed file → removed.
 	if res, _ := sc.Scan(ctx, store, nil); res.Changed != 0 || res.Removed != 0 {
 		t.Fatalf("rescan: %+v", res)
@@ -177,5 +221,15 @@ func TestWatch(t *testing.T) {
 	case <-changed:
 		t.Fatal("one burst of changes reported twice")
 	case <-time.After(watchQuiet + 500*time.Millisecond):
+	}
+}
+
+// bump moves a file's mtime forward, so that a rewrite in the same second
+// still counts as a change.
+func bump(t *testing.T, path string) {
+	t.Helper()
+	later := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(path, later, later); err != nil {
+		t.Fatal(err)
 	}
 }
