@@ -7,6 +7,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-29
+
 ### Added
 
 - Album covers in kitty and Ghostty. The cover of the album is at the bottom right of the track column, as a square that uses at most half of the column height. The cover shows only for a selected album, not for "All albums". The search shows covers too. scopolamine uses the kitty graphics protocol with Unicode placeholders, and keeps the covers in `~/.cache/scopolamine/art/`. `SCOPOLAMINE_COVERS=0` turns the covers off, and `SCOPOLAMINE_COVERS=1` turns them on in other terminals.
@@ -70,5 +72,6 @@ License:
 
 - MIT license. Parts of the code come from vibez by Simone Pelosi (MIT license). NOTICE and THIRD_PARTY_LICENSES.md give the details.
 
-[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/biomassa/scopolamine/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/biomassa/scopolamine/releases/tag/v0.1.0
