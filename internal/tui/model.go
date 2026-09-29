@@ -64,6 +64,8 @@ type (
 	PlayerReadyMsg struct{ Player player.Player }
 	// PlayerFailedMsg reports that playback could not start.
 	PlayerFailedMsg struct{ Err error }
+	// LocalChangedMsg reports changes in the local library folder.
+	LocalChangedMsg struct{}
 )
 
 type (
@@ -452,6 +454,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return tea.Batch(m.loadArtists(), m.flash(fmt.Sprintf("library synced: %d albums", msg.n), false))
 		})
+
+	case LocalChangedMsg:
+		return m, m.inView(m.local, m.startSync)
 
 	case PlayerStatusMsg:
 		m.playerStatus = string(msg)

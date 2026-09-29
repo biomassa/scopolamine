@@ -154,3 +154,28 @@ func TestScanReal(t *testing.T) {
 		t.Fatal("album of the removed file still there")
 	}
 }
+
+func TestWatch(t *testing.T) {
+	root := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	changed := make(chan struct{}, 4)
+	go func() { _ = Watch(ctx, root, func() { changed <- struct{}{} }) }()
+	time.Sleep(100 * time.Millisecond)
+
+	// A new folder with several files gives one call, after the quiet time.
+	write(t, filepath.Join(root, "user", "album", "1.flac"), []byte("x"))
+	write(t, filepath.Join(root, "user", "album", "2.flac"), []byte("x"))
+	time.Sleep(500 * time.Millisecond)
+	write(t, filepath.Join(root, "user", "album", "3.flac"), []byte("x")) // inside the new folder: watched too
+	select {
+	case <-changed:
+	case <-time.After(watchQuiet + 3*time.Second):
+		t.Fatal("no change reported")
+	}
+	select {
+	case <-changed:
+		t.Fatal("one burst of changes reported twice")
+	case <-time.After(watchQuiet + 500*time.Millisecond):
+	}
+}

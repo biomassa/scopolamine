@@ -342,6 +342,10 @@ func runTUI(ctx context.Context, offline bool, themeOverride string) error {
 
 	model := tui.New(ctx, deps)
 	prog = tea.NewProgram(model, tea.WithContext(ctx))
+	if deps.ScanLocal != nil {
+		// New downloads show up by themselves.
+		go func() { _ = localscan.Watch(ctx, root, func() { prog.Send(tui.LocalChangedMsg{}) }) }()
+	}
 	for _, err := range startupErrs {
 		go prog.Send(tui.PlayerFailedMsg{Err: err})
 	}
