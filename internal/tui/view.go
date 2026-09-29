@@ -397,9 +397,9 @@ func (m *Model) renderBar() string {
 	case m.filtering:
 		status = stDim.Render(" type to filter · enter play · esc clear")
 	case m.mode == modeSearch:
-		status = stDim.Render(" enter play · a add · D remove · s edit search · esc library · space pause · ←/→ seek · ? help")
+		status = stDim.Render(" enter play · a add · D remove · s edit search · esc library · space pause · ←/→ seek · +/- vol · ? help")
 	default:
-		status = stDim.Render(" enter play · space pause · n/p track · ←/→ seek · / filter · s search · D remove · o playing · ? help")
+		status = stDim.Render(" enter play · space pause · n/p track · ←/→ seek · +/- vol · / filter · s search · D remove · o playing · ? help")
 	}
 	b.WriteString(fit(status, w))
 	return b.String()

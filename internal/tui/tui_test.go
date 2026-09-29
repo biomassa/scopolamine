@@ -138,7 +138,7 @@ func TestBrowseAndPlay(t *testing.T) {
 	drive(m, m.Init())
 
 	s := screen(m)
-	for _, want := range []string{"Artists", "Albums", "Tracks", "All artists", "All albums", "Boards of Canada", "Broadcast", "vol 80%",
+	for _, want := range []string{"Artists", "Albums", "Tracks", "All artists", "All albums", "Boards of Canada", "Broadcast", "vol 80%", "+/- vol",
 		"pick an artist to list all of its tracks"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("screen missing %q:\n%s", want, s)

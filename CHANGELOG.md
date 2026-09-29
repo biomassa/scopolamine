@@ -11,6 +11,10 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 - A Makefile. `make` builds scopolamine and copies the binary to `~/.local/bin`. `make BINDIR=/other/dir` selects a different directory, and `make test` runs the tests.
 
+### Fixed
+
+- The legends of the library and the search show `+/- vol` again.
+
 ## [0.2.0] - 2026-09-29
 
 ### Added
