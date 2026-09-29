@@ -4,6 +4,8 @@ scopolamine is a terminal program for [Apple Music](https://music.apple.com) on 
 
 > This software was developed with the assistance of a LLM.
 
+![scopolamine: the artist, album, and track columns, with an album that plays](docs/screenshot.png)
+
 ## Features
 
 - Three columns: artists, albums, and tracks. Each column starts with an "All" row. "All albums" shows all the tracks of an artist, grouped by album.
