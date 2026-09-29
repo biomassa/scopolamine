@@ -66,10 +66,10 @@ func (m *Model) legendItems() []legendItem {
 		return keys("enter", "play", "a", "add", "D", "remove", "s", "edit search", "esc", "library", "space", "pause",
 			"←/→", "seek", "+/-", "vol", "T", "theme", "?", "help")
 	case m.source == library.SourceLocal:
-		return keys("enter", "play", "space", "pause", "n/p", "track", "←/→", "seek", "+/-", "vol", "/", "filter",
+		return keys("enter", "play", "space", "pause", "[ ]", "track", "←/→", "seek", "+/-", "vol", "/", "filter",
 			"v", "sort", "L", "Apple Music", "o", "playing", "T", "theme", "?", "help")
 	}
-	items := keys("enter", "play", "space", "pause", "n/p", "track", "←/→", "seek", "+/-", "vol", "/", "filter",
+	items := keys("enter", "play", "space", "pause", "[ ]", "track", "←/→", "seek", "+/-", "vol", "/", "filter",
 		"s", "search", "D", "remove")
 	if m.deps.ScanLocal != nil {
 		items = append(items, legendItem{"L", "local"})
@@ -550,7 +550,7 @@ func (m *Model) renderHelp() string {
 		{"/", "filter the focused column (esc clears)"},
 		{"enter", "play album (from the selected track in Tracks)"},
 		{"space", "play / pause (after a restart: resume where you left off)"},
-		{"n  p", "next / previous track"},
+		{"] [  (n p)", "next / previous track"},
 		{"→ ←  (. ,)", "seek ±10 s"},
 		{"shift+→ shift+←", "seek ±60 s"},
 		{"+  -", "volume"},

@@ -21,6 +21,8 @@ type fakePlayer struct {
 	ids    []string
 	start  int
 	toggle int
+	next   int
+	prev   int
 	seeks  []time.Duration
 	bc     player.Broadcast
 }
@@ -35,8 +37,8 @@ func (f *fakePlayer) Play() error                    { return nil }
 func (f *fakePlayer) Pause() error                   { return nil }
 func (f *fakePlayer) Toggle() error                  { f.toggle++; return nil }
 func (f *fakePlayer) Stop() error                    { return nil }
-func (f *fakePlayer) Next() error                    { return nil }
-func (f *fakePlayer) Previous() error                { return nil }
+func (f *fakePlayer) Next() error                    { f.next++; return nil }
+func (f *fakePlayer) Previous() error                { f.prev++; return nil }
 func (f *fakePlayer) Seek(d time.Duration) error     { f.seeks = append(f.seeks, d); return nil }
 func (f *fakePlayer) SetVolume(float64) error        { return nil }
 func (f *fakePlayer) State() player.State            { return player.State{} }
@@ -193,6 +195,13 @@ func TestBrowseAndPlay(t *testing.T) {
 	key(m, "enter")
 	if fp.start != 1 {
 		t.Fatalf("start = %d, want 1", fp.start)
+	}
+
+	key(m, "]")
+	key(m, "[")
+	key(m, "n")
+	if fp.next != 2 || fp.prev != 1 {
+		t.Fatalf("] / [ / n: next=%d prev=%d", fp.next, fp.prev)
 	}
 
 	key(m, "space")

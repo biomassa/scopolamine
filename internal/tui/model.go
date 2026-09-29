@@ -990,9 +990,9 @@ func (m *Model) playbackKey(k string) (tea.Cmd, bool) {
 			return m.resumePlayback(), true
 		}
 		return m.withPlayer(func(p player.Player) error { return p.Toggle() }), true
-	case "n", ">":
+	case "]", "n", ">":
 		return m.withPlayer(func(p player.Player) error { return p.Next() }), true
-	case "p", "<":
+	case "[", "p", "<":
 		return m.withPlayer(func(p player.Player) error { return p.Previous() }), true
 	case "x":
 		m.playingAlbum = library.Album{}

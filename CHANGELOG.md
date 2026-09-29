@@ -10,6 +10,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 ### Changed
 
 - In the search, singles show in the normal color; only the `single` tag at the right is pale.
+- `]` and `[` go to the next and the previous track; the legends show `[ ] track`. `n` `p` and `>` `<` still work.
 
 ## [0.3.0] - 2026-09-29
 

@@ -97,7 +97,7 @@ To sign in with a different account, use `scopolamine logout` and then `scopolam
 | `enter` | On an artist: go to the albums. On an album: play it and go to the tracks. On a track: play from this track. On the resume track of a mode: continue at the saved position. |
 | `space` | Play or pause. After a restart: continue the last track. |
 | `←` `→` | Seek 10 seconds back or forward. `shift` seeks 60 seconds. `,` and `.` also work. |
-| `n` `p` | Play the next or the previous track. |
+| `]` `[` | Play the next or the previous track. `n` `p` and `>` `<` also work. |
 | `+` `-` | Change the volume. |
 | `x` | Stop. |
 | `o` | Go to the album that plays. |
