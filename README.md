@@ -112,7 +112,7 @@ To sign in with a different account, use `scopolamine logout` and then `scopolam
 
 ### "All" rows
 
-"All artists" shows all the albums. "All albums" shows all the tracks of the selected artist, grouped by album. `enter` on "All albums" or on "All" plays all these tracks. When "All artists" is selected, "All albums" shows no tracks, because that needs a request for each album in the library.
+The "All" rows are in the accent color of the theme and stay at the top of their columns; the list under them scrolls. "All artists" shows all the albums. "All albums" shows all the tracks of the selected artist, grouped by album. `enter` on "All albums" or on "All" plays all these tracks. When "All artists" is selected, "All albums" shows no tracks, because that needs a request for each album in the library.
 
 ### Search
 

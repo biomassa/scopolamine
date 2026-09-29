@@ -254,13 +254,13 @@ type cell struct {
 	paused      bool // with playing: ‖ instead of ▶
 	header      bool
 	dim         bool
-	rightDim    bool // the right text is pale (unless the row has the cursor)
+	rightDim    bool // the right text is pale
+	all         bool // an "All" row: accent color, pinned at the top
 }
 
 // renderColumn returns h+1 lines (title + h rows) of p, each exactly w cells.
 // cellAt renders the row for an underlying item index.
 func (m *Model) renderColumn(p *pane, w, h int, focused, filtering bool, empty string, cellAt func(idx int) cell) []string {
-	p.scroll(h)
 	title := " " + p.title
 	count := fmt.Sprintf("%d ", len(p.match))
 	if p.filter != "" || (focused && filtering) {
@@ -273,54 +273,91 @@ func (m *Model) renderColumn(p *pane, w, h int, focused, filtering bool, empty s
 	if focused {
 		ts = stTitleFocus
 	}
+	blank := strings.Repeat(" ", w)
 	lines := []string{ts.Render(leftRight(title, count, w))}
-	for r := 0; r < h; r++ {
-		mi := p.offset + r
-		if mi >= len(p.match) {
+	if h <= 0 {
+		return lines
+	}
+	// An empty line under the title.
+	lines = append(lines, blank)
+	avail := h - 1
+
+	row := func(mi int) string {
+		c := cellAt(p.match[mi])
+		return m.renderCell(c, w, mi == p.cursor, focused)
+	}
+
+	// The "All" row stays at the top, with an empty line under it; the list
+	// below scrolls on its own.
+	first, cursor := 0, p.cursor
+	if len(p.match) > 0 && avail >= 3 && cellAt(p.match[0]).all {
+		lines = append(lines, row(0), blank)
+		avail -= 2
+		first, cursor = 1, p.cursor-1
+	}
+	n := len(p.match) - first
+	off := p.offset
+	if cursor >= 0 {
+		if cursor < off {
+			off = cursor
+		}
+		if cursor >= off+avail {
+			off = cursor - avail + 1
+		}
+	}
+	off = max(0, min(off, max(0, n-avail)))
+	p.offset = off
+	for r := 0; r < avail; r++ {
+		i := off + r
+		if i >= n {
 			if r == 0 && empty != "" {
 				lines = append(lines, stDim.Render(fit(" "+empty, w)))
 			} else {
-				lines = append(lines, strings.Repeat(" ", w))
+				lines = append(lines, blank)
 			}
 			continue
 		}
-		c := cellAt(p.match[mi])
-		mark := "  "
-		if c.playing {
-			mark = "▶ "
-			if c.paused {
-				mark = "‖ "
-			}
-		}
-		right := " " + c.right + " "
-		st := stRow
-		cursor := mi == p.cursor
-		switch {
-		case cursor && focused:
-			st = stSelFocus
-		case cursor:
-			st = stSel
-		case c.playing:
-			st = stPlaying
-		case c.dim:
-			st = stDim
-		case c.header:
-			st = stHeader
-		}
-		if c.rightDim && c.right != "" && ansi.StringWidth(right) < w {
-			pale := stDim
-			switch {
-			case cursor && focused:
-				pale = stSelFocusPale
-			case cursor:
-				pale = stSelPale
-			}
-			lines = append(lines, st.Render(fit(mark+c.left, w-ansi.StringWidth(right)))+pale.Render(right))
-			continue
-		}
-		lines = append(lines, st.Render(leftRight(mark+c.left, right, w)))
+		lines = append(lines, row(first+i))
 	}
 	return lines
+}
+
+// renderCell draws one row of width w.
+func (m *Model) renderCell(c cell, w int, cursor, focused bool) string {
+	mark := "  "
+	if c.playing {
+		mark = "▶ "
+		if c.paused {
+			mark = "‖ "
+		}
+	}
+	right := " " + c.right + " "
+	st := stRow
+	switch {
+	case cursor && focused:
+		st = stSelFocus
+	case cursor:
+		st = stSel
+	case c.playing:
+		st = stPlaying
+	case c.all:
+		st = stPlaying // the "All" rows use the accent
+	case c.dim:
+		st = stDim
+	case c.header:
+		st = stHeader
+	}
+	if c.rightDim && c.right != "" && ansi.StringWidth(right) < w {
+		pale := stDim
+		switch {
+		case cursor && focused:
+			pale = stSelFocusPale
+		case cursor:
+			pale = stSelPale
+		}
+		return st.Render(fit(mark+c.left, w-ansi.StringWidth(right))) + pale.Render(right)
+	}
+	return st.Render(leftRight(mark+c.left, right, w))
 }
 
 // trackCell renders row idx of a tracks column (shared by library and
@@ -329,7 +366,7 @@ func (m *Model) trackCell(rows []trackRow, tracks []library.Track, nums []string
 	row := rows[idx]
 	switch row.kind {
 	case rowAll:
-		return cell{left: "All", right: fmt.Sprintf("%d · %s", len(tracks), fmtDur(totalDuration(tracks)))}
+		return cell{left: "All", right: fmt.Sprintf("%d · %s", len(tracks), fmtDur(totalDuration(tracks))), all: true}
 	case rowHeader:
 		year := "····"
 		if row.album.Year > 0 {
@@ -374,7 +411,7 @@ func (m *Model) renderPane(i, w, h int) []string {
 		}
 		cellAt = func(idx int) cell {
 			if idx == 0 {
-				return cell{left: allArtists}
+				return cell{left: allArtists, all: true}
 			}
 			a := m.artists[idx-1]
 			return cell{left: a.Name, right: strconv.Itoa(a.AlbumCount),
@@ -383,7 +420,7 @@ func (m *Model) renderPane(i, w, h int) []string {
 	case paneAlbums:
 		cellAt = func(idx int) cell {
 			if idx == 0 {
-				return cell{left: p.labels[0], right: strconv.Itoa(len(m.albums))}
+				return cell{left: p.labels[0], right: strconv.Itoa(len(m.albums)), all: true}
 			}
 			a := m.albums[idx-1]
 			return cell{left: p.labels[idx], right: a.Format, rightDim: true, playing: a.ID == m.playingAlbum.ID}

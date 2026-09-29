@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -434,5 +435,46 @@ func TestLegacySession(t *testing.T) {
 	}
 	if !strings.Contains(screen(m), "space resumes") {
 		t.Fatal("legacy resume point lost")
+	}
+}
+
+func TestPinnedAllRow(t *testing.T) {
+	ctx := context.Background()
+	s, err := library.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	var albums []library.Album
+	for i := range 30 {
+		albums = append(albums, library.Album{ID: fmt.Sprintf("l.%02d", i), Title: "T", Artist: fmt.Sprintf("Artist %02d", i)})
+	}
+	if err := s.ReplaceAlbums(ctx, library.SourceApple, albums); err != nil {
+		t.Fatal(err)
+	}
+	m := New(ctx, Deps{Store: s, Player: &fakePlayer{}})
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 16})
+	drive(m, m.Init())
+	col := func() []string { // the artist column of each line
+		var out []string
+		for _, l := range strings.Split(screen(m), "\n") {
+			if i := strings.Index(l, "│"); i >= 0 {
+				out = append(out, strings.TrimSpace(l[:i]))
+			}
+		}
+		return out
+	}
+	c := col()
+	if c[1] != "" || c[2] != "All artists" || c[3] != "" || !strings.HasPrefix(c[4], "Artist 00") {
+		t.Fatalf("layout: %q", c[:5])
+	}
+	key(m, "G") // the last artist: the list scrolls, "All" stays
+	c = col()
+	if c[2] != "All artists" || !strings.Contains(strings.Join(c, "|"), "Artist 29") || strings.Contains(strings.Join(c, "|"), "Artist 00") {
+		t.Fatalf("after scrolling: %q", c)
+	}
+	key(m, "g") // back to "All"
+	if m.panes[paneArtists].selected() != 0 {
+		t.Fatal("cursor cannot reach the pinned All row")
 	}
 }
