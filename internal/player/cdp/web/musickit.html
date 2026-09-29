@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>scopolamine</title>
+  <!--
+    MusicKit JS bridge page, driven by headless Chrome (Widevine) over CDP.
+
+    Derived from vibez's musickit.html (https://github.com/simonepelosi/vibez),
+    Copyright (c) 2025 Simone Pelosi, MIT License. Trimmed to album playback:
+    no GStreamer/preview mode, EQ, playlists, shuffle or queue editing.
+
+    Go → JS : page.Evaluate of window.sc*() commands
+    JS → Go : goReady, goNeedsAuth, goState, goUserToken, goError, goSkipped, goLog
+
+    The musickitloaded listener MUST be registered before the musickit.js
+    <script> tag: MusicKit dispatches the event during its own execution.
+  -->
+  <script>
+  document.addEventListener('musickitloaded', async function() {
+    const errName = (e) => {
+      if (!e) return '';
+      const name = (typeof e.name === 'string' && e.name) ? e.name : '';
+      const msg  = (typeof e.message === 'string' && e.message) ? e.message : '';
+      if (name && msg && name !== 'Error') return name + ': ' + msg;
+      return msg || name || String(e);
+    };
+    const log = (msg) => goLog(msg).catch(() => {});
+    // Anything that still escapes a handler: log it (with where it came
+    // from, when known) instead of letting it surface as a page error.
+    window.addEventListener('unhandledrejection', (ev) => {
+      ev.preventDefault();
+      log('[unhandled] ' + errName(ev.reason) + (ev.reason?.stack ? ' @ ' + String(ev.reason.stack).split('\n').slice(0, 3).join(' | ') : ''));
+    });
+    // guard runs a MusicKit call for command `name`, logging sync throws and
+    // async rejections under that name. MusicKit rejects some calls (seek,
+    // skip) made during track transitions; those are harmless.
+    const guard = (name, fn) => {
+      try {
+        const r = fn();
+        if (r && typeof r.catch === 'function') r.catch(e => log(`[${name}] ${errName(e)}`));
+      } catch(e) { log(`[${name}] ${errName(e)}`); }
+    };
+    const isAuthError = (e) => {
+      const s = (errName(e) + ' ' + String(e?.status || '')).toLowerCase();
+      return s.includes('authoriz') || s.includes('401') || s.includes('403') || s.includes('expired token');
+    };
+
+    try {
+      // Storefront is deliberately not forced: MusicKit derives it from the
+      // user token, and a wrong one yields CONTENT_EQUIVALENT everywhere.
+      const music = await MusicKit.configure({
+        developerToken: '{{.DeveloperToken}}',
+        app: { name: 'scopolamine', build: '{{.Version}}' },
+      });
+
+      // MusicKit guesses an explicit-content restriction from the storefront
+      // country when it has no stored preference (always, with an ephemeral
+      // profile) and then silently drops explicit items from queues. Latch it
+      // off before the user token is applied; Apple still enforces real
+      // account restrictions server-side. (vibez #130)
+      try { music.restrictedEnabled = false; } catch(_) {}
+
+      // Always ask for the best stream the web player offers (256 kbps AAC).
+      try { music.bitrate = (MusicKit.PlaybackBitrate && MusicKit.PlaybackBitrate.HIGH) || 256; } catch(_) {}
+
+      try {
+        music.musicUserToken = '{{.UserToken}}';
+      } catch(e) {
+        if (isAuthError(e)) { await goNeedsAuth('expired').catch(() => {}); return; }
+        throw e;
+      }
+
+      music.addEventListener('userTokenDidChange', () => {
+        goUserToken(MusicKit.getInstance().musicUserToken || '').catch(() => {});
+      });
+      music.addEventListener('authorizationStatusDidChange', () => {
+        if (!MusicKit.getInstance().isAuthorized) goNeedsAuth('expired').catch(() => {});
+      });
+
+      const _m = () => MusicKit.getInstance();
+
+      // ── state mirroring ──────────────────────────────────────────────────
+      let _q  = [];   // resolved library song items, album order
+      let _qi = -1;   // index in _q of the current item
+
+      function stateJSON() {
+        const m = _m();
+        const item = m.nowPlayingItem;
+        return JSON.stringify({
+          isPlaying:     m.isPlaying,
+          playbackState: m.playbackState,
+          currentTime:   m.currentPlaybackTime || 0,
+          volume:        m.volume,
+          bitrate:       m.bitrate || 0,
+          queueIndex:    _qi,
+          queueLength:   _q.length,
+          nowPlaying: item ? {
+            id:         item.id,
+            catalogId:  item.attributes?.playParams?.catalogId || '',
+            title:      item.attributes?.name || '',
+            artist:     item.attributes?.artistName || '',
+            album:      item.attributes?.albumName || '',
+            artworkURL: item.attributes?.artwork ? MusicKit.formatArtworkURL(item.attributes.artwork, 512, 512) : '',
+            durationMs: item.attributes?.durationInMillis || 0,
+          } : null,
+        });
+      }
+      let _last = '';
+      function notify(force) {
+        const m = _m();
+        const snap = [m.isPlaying, m.playbackState, Math.floor(m.currentPlaybackTime || 0),
+                      m.nowPlayingItem?.id || '', m.volume, _qi].join('|');
+        if (!force && snap === _last) return;
+        _last = snap;
+        goState(stateJSON()).catch(() => {});
+      }
+      music.addEventListener('playbackStateDidChange',  () => notify(true));
+      music.addEventListener('nowPlayingItemDidChange', () => notify(true));
+      setInterval(() => notify(false), 250);
+
+      // ── queue ────────────────────────────────────────────────────────────
+      // Two modes, exactly one of which advances playback (see vibez's notes
+      // and #96 measurements):
+      //
+      //   native:   one setQueue({items}) holds the whole album and MusicKit
+      //             advances by itself on one media element source. vibez
+      //             measured ~20-40 ms boundaries for mixed catalog+library
+      //             queues vs ~450-1000 ms for per-track rebuilds; this
+      //             all-library shape is unmeasured.
+      //   one-item: setQueue({items:[x]}) per track, advanced on `completed`.
+      //             Only used to recover when the native queue fails.
+      let _native = false;
+      let _busy   = false;
+      let _want   = null;  // {idx, native} requested while busy
+
+      music.addEventListener('nowPlayingItemDidChange', () => {
+        const item = _m().nowPlayingItem;
+        if (item) log(`[track] "${item.attributes?.name || '?'}" (${item.id})`);
+        if (!_native || !item) return;
+        const idx = _q.findIndex(x => x.id === item.id);
+        if (idx >= 0) _qi = idx;
+      });
+
+      // setQueue during a seek raises spurious CONTENT_EQUIVALENT; wait it out.
+      function waitNotSeeking(m) {
+        const seeking = [6, 7];
+        if (!seeking.includes(m.playbackState)) return Promise.resolve();
+        return new Promise(resolve => {
+          const done = () => { m.removeEventListener('playbackStateDidChange', h); clearTimeout(t); resolve(); };
+          const h = () => { if (!seeking.includes(m.playbackState)) done(); };
+          const t = setTimeout(done, 200);
+          m.addEventListener('playbackStateDidChange', h);
+        });
+      }
+
+      function runWanted() {
+        if (!_want) return;
+        const w = _want; _want = null;
+        if (w.native) playNative(w.idx); else playOne(w.idx);
+      }
+
+      async function playNative(start) {
+        if (_busy) { _want = { idx: start, native: true }; return; }
+        _busy = true;
+        const m = _m();
+        try {
+          await waitNotSeeking(m);
+          await m.setQueue({ items: _q.slice() });
+          if (start > 0) await m.changeToMediaAtIndex(start);
+          _qi = start;
+          _native = true;
+          await m.play();
+          log(`[native] playing ${_q.length} item(s) from #${start}`);
+        } catch(e) {
+          _native = false;
+          log(`[native] failed (${errName(e)}) → one-item mode`);
+          if (isAuthError(e)) goNeedsAuth('expired').catch(() => {});
+          else _want = { idx: start, native: false };
+        } finally {
+          _busy = false;
+          runWanted();
+        }
+      }
+
+      const isUnavailable = (e) => ['CONTENT_EQUIVALENT','CONTENT_UNAVAILABLE','CONTENT_RESTRICTED','NOT_FOUND']
+        .some(code => e?.name === code || errName(e).startsWith(code));
+
+      async function playOne(idx) {
+        if (idx < 0 || idx >= _q.length) return;
+        if (_busy) { _want = { idx, native: false }; return; }
+        _busy = true;
+        _native = false;
+        _qi = idx;
+        const m = _m();
+        try {
+          await waitNotSeeking(m);
+          await m.setQueue({ items: [_q[idx]] });
+          await m.play();
+          log(`[one] playing #${idx}`);
+        } catch(e) {
+          if (isUnavailable(e)) {
+            log(`[one] #${idx} unavailable (${errName(e)}) → skip`);
+            goSkipped(_q[idx].id).catch(() => {});
+            if (idx + 1 < _q.length) _want = { idx: idx + 1, native: false };
+          } else if (isAuthError(e)) {
+            goNeedsAuth('expired').catch(() => {});
+          } else {
+            goError('play: ' + errName(e)).catch(() => {});
+          }
+        } finally {
+          _busy = false;
+          runWanted();
+        }
+      }
+
+      // A failure inside a live native queue never reaches a try/catch; hand
+      // the current index to one-item mode, which can skip past it.
+      music.addEventListener('mediaPlaybackError', (e) => {
+        if (!_native) return;
+        const idx = _qi >= 0 ? _qi : 0;
+        log(`[native] playback error (${errName(e?.detail ?? e)}) at #${idx} → one-item`);
+        _native = false;
+        _m().stop().catch(() => {});
+        playOne(idx);
+      });
+
+      const completed = (MusicKit.PlaybackStates && MusicKit.PlaybackStates.completed != null)
+        ? MusicKit.PlaybackStates.completed : 9;
+      music.addEventListener('playbackStateDidChange', () => {
+        const m = _m();
+        if (m.playbackState !== completed) return;
+        if (_native) {
+          const q = m.queue;
+          const hasNext = q && typeof q.position === 'number' && q.position < q.length - 1;
+          if (hasNext) return;      // MusicKit advances itself
+          _native = false;          // album finished
+          log('[auto] album finished');
+          notify(true);
+          return;
+        }
+        if (_busy || _qi < 0) return;
+        if (_qi + 1 < _q.length) playOne(_qi + 1);
+        else { log('[auto] album finished'); notify(true); }
+      });
+
+      // Resolve song ids to MediaItems, preserving order. Library songs
+      // ("i.…") come from the user's library, catalog songs (numeric, from
+      // search) from the storefront catalog, as in vibez's _resolveItems.
+      async function resolveItems(ids) {
+        const byId = {};
+        const lib = ids.filter(id => id.startsWith('i.'));
+        const cat = ids.filter(id => !id.startsWith('i.'));
+        const sf = _m().storefrontId || 'us';
+        for (let i = 0; i < lib.length; i += 100) {
+          const r = await _m().api.music('/v1/me/library/songs', { ids: lib.slice(i, i + 100) });
+          for (const s of r?.data?.data ?? []) byId[s.id] = s;
+        }
+        for (let i = 0; i < cat.length; i += 100) {
+          const r = await _m().api.music(`/v1/catalog/${sf}/songs`, { ids: cat.slice(i, i + 100) });
+          for (const s of r?.data?.data ?? []) byId[s.id] = s;
+        }
+        const out = [];
+        for (const id of ids) {
+          const s = byId[id];
+          if (s && s.attributes?.playParams) out.push(s);
+          else log(`[resolve] ${id} not playable — dropped`);
+        }
+        return out;
+      }
+
+      // ── commands ─────────────────────────────────────────────────────────
+      window.scPlayTracks = async (argJSON) => {
+        try {
+          const { ids, start } = JSON.parse(argJSON);
+          const want = ids[start];
+          const items = await resolveItems(ids.filter(Boolean));
+          if (items.length === 0) { goError('not available in your Apple Music storefront').catch(() => {}); return; }
+          _q = items;
+          let idx = items.findIndex(x => x.id === want);
+          if (idx < 0) idx = 0;
+          _qi = -1;
+          if (items.length > 1) playNative(idx); else playOne(idx);
+        } catch(e) {
+          if (isAuthError(e)) goNeedsAuth('expired').catch(() => {});
+          else goError('queue: ' + errName(e)).catch(() => {});
+        }
+      };
+      window.scPlay = async () => {
+        const m = _m();
+        if (!m.nowPlayingItem && _qi >= 0) { playOne(_qi); return; }
+        try { await m.play(); }
+        catch(e) {
+          if (e?.name === 'CONTENT_EQUIVALENT') {
+            await m.stop().catch(() => {});
+            try { await m.play(); } catch(e2) { goError('play: ' + errName(e2)).catch(() => {}); }
+          } else goError('play: ' + errName(e)).catch(() => {});
+        }
+      };
+      window.scPause = async () => {
+        try { await _m().pause(); } catch(e) { goError('pause: ' + errName(e)).catch(() => {}); }
+      };
+      window.scToggle = () => guard('toggle', () => (_m().isPlaying ? window.scPause() : window.scPlay()));
+      window.scStop = () => guard('stop', async () => {
+        _native = false; _q = []; _qi = -1;
+        await _m().stop().catch(() => {});
+        notify(true);
+      });
+      window.scNext = () => guard('next', () => {
+        const m = _m();
+        if (_native && m.queue && m.queue.position < m.queue.length - 1) return m.skipToNextItem();
+        if (_qi + 1 < _q.length) playOne(_qi + 1);
+      });
+      window.scPrev = () => guard('previous', () => {
+        const m = _m();
+        // Conventional: restart the track unless we are near its start.
+        if ((m.currentPlaybackTime || 0) > 3) return m.seekToTime(0);
+        if (_native && m.queue && m.queue.position > 0) return m.skipToPreviousItem();
+        if (_qi > 0) { playOne(_qi - 1); return; }
+        return m.seekToTime(0);
+      });
+      window.scSeek = (t) => guard('seek', () => {
+        const m = _m();
+        if (!m.nowPlayingItem) return; // nothing loaded: MusicKit would reject
+        return m.seekToTime(Math.max(0, t));
+      });
+      window.scSetVolume = (v) => guard('volume', () => { _m().volume = Math.min(1, Math.max(0, v)); notify(true); });
+
+      log(`[init] musickit=${MusicKit.version || '?'} storefront=${music.storefrontId || '?'}`);
+      await goReady(music.storefrontId || '').catch(() => {});
+    } catch(e) {
+      goError(errName(e)).catch(() => {});
+    }
+  });
+  </script>
+  <script src="https://js-cdn.music.apple.com/musickit/v3/musickit.js"
+          onerror="if(typeof goError==='function'){goError('MusicKit JS failed to load from Apple CDN').catch(function(){});}"></script>
+</head>
+<body></body>
+</html>

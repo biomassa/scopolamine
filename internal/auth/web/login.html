@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<!-- Derived from vibez (https://github.com/simonepelosi/vibez), Copyright (c) 2025 Simone Pelosi, MIT License. -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>scopolamine — sign in to Apple Music</title>
+  <style>
+    body { background: #16161a; color: #d8d8d8; font: 15px/1.5 system-ui, sans-serif;
+           display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .card { background: #1f1f24; border: 1px solid #2c2c33; border-radius: 12px;
+            padding: 40px 48px; max-width: 420px; width: 100%; text-align: center; }
+    h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: 1px; }
+    .sub { color: #777; margin-bottom: 32px; }
+    button { background: #d8d8d8; color: #16161a; border: 0; border-radius: 8px; padding: 12px 24px;
+             font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; }
+    button:disabled { background: #333; color: #777; cursor: default; }
+    #status { margin-top: 20px; min-height: 1.5em; }
+    .err { color: #e06c75; } .ok { color: #98c379; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>scopolamine</h1>
+    <div class="sub">Connect your Apple Music library</div>
+    <button id="go" onclick="connect()">Sign in with Apple Music</button>
+    <div id="status"></div>
+  </div>
+  <script src="https://js-cdn.music.apple.com/musickit/v3/musickit.js" crossorigin></script>
+  <script>
+    async function connect() {
+      const btn = document.getElementById('go');
+      const status = document.getElementById('status');
+      btn.disabled = true;
+      status.className = '';
+      status.textContent = 'Waiting for Apple…';
+      try {
+        await MusicKit.configure({
+          developerToken: {{.DeveloperToken}},
+          app: { name: 'scopolamine', build: '0.1.0' },
+        });
+        const token = await MusicKit.getInstance().authorize();
+        const r = await fetch('callback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_token: token }),
+        });
+        if (!r.ok) throw new Error('scopolamine returned ' + r.status);
+        status.className = 'ok';
+        status.textContent = 'Connected. You can close this tab and return to the terminal.';
+        btn.textContent = 'Connected ✓';
+      } catch (e) {
+        status.className = 'err';
+        status.textContent = 'Error: ' + (e && e.message ? e.message : e);
+        btn.disabled = false;
+        btn.textContent = 'Try again';
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+scopolamine
+Copyright (c) 2026 biomassa
+MIT License. See LICENSE.
+
+This project contains code that is derived from vibez
+(https://github.com/simonepelosi/vibez), Copyright (c) 2025 Simone Pelosi.
+The MIT License applies to that code. See third_party/vibez/LICENSE.
+
+These parts are derived from vibez:
+
+  internal/auth            the MusicKit sign-in page and flow
+  internal/applemusic      the request and response code of the Apple Music
+                           client
+  internal/player/cdp      the headless Chrome and Widevine playback bridge,
+                           including web/musickit.html and the Chrome
+                           download and launch code
+  internal/mpris           the MPRIS2 D-Bus server
+
+Each file that is derived from vibez has a header that says so.
+
+The scopolamine binary contains third-party Go modules. THIRD_PARTY_LICENSES.md
+gives their license texts. scripts/third-party-licenses.sh makes that file
+again after a dependency change.
+
+At run time, scopolamine downloads Google Chrome and the Playwright driver.
+They are not part of this project. Their own licenses apply.
+
+Apple Music, MusicKit, and Apple are trademarks of Apple Inc. scopolamine is
+not affiliated with Apple or endorsed by Apple.

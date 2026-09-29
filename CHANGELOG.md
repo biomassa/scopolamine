@@ -1,0 +1,70 @@
+# Changelog
+
+This file records all notable changes to this project.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0] - 2026-09-29
+
+The first release.
+
+### Added
+
+Screen and navigation:
+
+- Terminal UI with three columns: artists, albums, and tracks, and a status bar with the track, the progress, the bitrate, and the volume.
+- Each column starts with an "All" row. "All artists" shows all the albums. "All albums" shows all the tracks of the artist, grouped by album, with a header for each album.
+- Albums in date order. Undated albums come last. "Various Artists" and similar names group the compilations, at the end of the list. A leading "The" does not change the sort order of an artist.
+- Track numbers on all tracks, as `1. Title`. Multi-disc albums show `2-3. Title`.
+- `tab` and `shift+tab` go to the next or the previous column. `l`, `h`, and `1` `2` `3` also work.
+- `enter` on an artist goes to the albums. `enter` on an album plays it and goes to the tracks, with the cursor on the first track.
+- A filter for each column (`/`). `tab` and `enter` keep the filter, and `esc` clears it.
+- `o` goes to the album that plays.
+- A help screen (`?`) with the keys and the version.
+
+Playback:
+
+- Apple Music playback through MusicKit JS in a headless Google Chrome with Widevine, at 256 kbps AAC, the maximum on Linux.
+- The full album goes into one MusicKit queue. If the queue fails, playback continues one track at a time.
+- `space` plays or pauses. `n` and `p` go to the next or the previous track. `x` stops.
+- `←` and `→` seek 10 seconds. With `shift`, they seek 60 seconds. `,` and `.` also work.
+- `+` and `-` change the volume. The volume persists.
+- Tracks without a stream in the country of the account show as "unavailable". Playback skips them.
+- Resume: at the next start, scopolamine selects the artist, album, and track of the last session. `space` continues the last track at the same position.
+- MPRIS support for media keys and desktop media widgets.
+- A player log in `~/.cache/scopolamine/player.log`.
+
+Library:
+
+- A local library cache in SQLite. The album list syncs at the start when it is older than 12 hours, and with `R` or `scopolamine sync`. The sync gets eight pages at a time and shows the progress.
+- The track lists of an album load when you select the album, and stay in the cache.
+
+Search:
+
+- A search of the Apple Music catalog (`s`), with the same three columns. The first artist row shows the albums that match the search. An artist row shows the discography of the artist, oldest first.
+- "✓ in library" marks the albums that are in your library.
+- `enter` plays an album from the search without an addition to the library.
+- `a` adds an album to your library. The album shows in the library view immediately.
+
+Removal:
+
+- `D` removes an album from your library after a confirmation. It works in the library view and in the search.
+
+Sign-in and tokens:
+
+- `scopolamine login` opens music.apple.com in a Chrome window and gets the user token after the sign-in. `scopolamine logout` removes it.
+- The developer token comes from `SCOPOLAMINE_DEV_TOKEN`, from the config file, or from the music.apple.com web player. `scopolamine token` shows the source and the expiry date, and `scopolamine token refresh` gets the token again.
+
+Commands:
+
+- `scopolamine`, `--offline`, `login`, `logout`, `sync`, `token`, `version`, and `--version`.
+
+License:
+
+- MIT license. Parts of the code come from vibez by Simone Pelosi (MIT license). NOTICE and THIRD_PARTY_LICENSES.md give the details.
+
+[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/biomassa/scopolamine/releases/tag/v0.1.0
