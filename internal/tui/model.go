@@ -193,7 +193,7 @@ func (m *Model) Init() tea.Cmd {
 func (m *Model) loadArtists() tea.Cmd {
 	store := m.deps.Store
 	return func() tea.Msg {
-		a, err := store.Artists(m.ctx)
+		a, err := store.Artists(m.ctx, library.SourceApple)
 		return artistsMsg{a, err}
 	}
 }
@@ -206,9 +206,9 @@ func (m *Model) loadAlbums(artist string) tea.Cmd {
 			err error
 		)
 		if artist == allArtists {
-			a, err = store.AllAlbums(m.ctx)
+			a, err = store.AllAlbums(m.ctx, library.SourceApple)
 		} else {
-			a, err = store.AlbumsByArtist(m.ctx, artist)
+			a, err = store.AlbumsByArtist(m.ctx, library.SourceApple, artist)
 		}
 		return albumsMsg{artist, a, err}
 	}

@@ -20,6 +20,7 @@ import (
 // Source identifies where an album lives.
 const (
 	SourceApple = "apple"
+	SourceLocal = "local"
 )
 
 // VariousArtists is the display name compilation albums are grouped under.
@@ -57,6 +58,15 @@ type Track struct {
 	Number    int
 	Duration  time.Duration
 	Playable  bool
+
+	// Local tracks only.
+	Path       string        // audio file
+	Folder     string        // album folder, relative to the library root
+	CueTrack   int           // cue track: its number in the cue sheet (chapter CueTrack-1); 0 otherwise
+	Start      time.Duration // cue track: start in the file
+	Codec      string        // e.g. "flac"
+	SampleRate int           // Hz
+	Bits       int           // bits per sample; 0 for lossy formats
 }
 
 // Store is the SQLite-backed library.
@@ -91,7 +101,19 @@ CREATE TABLE IF NOT EXISTS tracks (
 	number      INTEGER NOT NULL DEFAULT 0,
 	duration_ms INTEGER NOT NULL DEFAULT 0,
 	playable    INTEGER NOT NULL DEFAULT 1,
+	path        TEXT NOT NULL DEFAULT '',
+	folder      TEXT NOT NULL DEFAULT '',
+	cue_track   INTEGER NOT NULL DEFAULT 0,
+	start_ms    INTEGER NOT NULL DEFAULT 0,
+	codec       TEXT NOT NULL DEFAULT '',
+	sample_rate INTEGER NOT NULL DEFAULT 0,
+	bits        INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY (album_id, id)
+);
+CREATE TABLE IF NOT EXISTS local_files (
+	path  TEXT PRIMARY KEY,
+	mtime INTEGER NOT NULL,
+	size  INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS meta (
 	key   TEXT PRIMARY KEY,
@@ -146,7 +168,28 @@ func migrate(db *sql.DB) error {
 			}
 		}
 	}
-	return nil
+	// The local-file columns (0.3.0). Existing rows keep their data.
+	for _, col := range []string{
+		"path TEXT NOT NULL DEFAULT ''",
+		"folder TEXT NOT NULL DEFAULT ''",
+		"cue_track INTEGER NOT NULL DEFAULT 0",
+		"start_ms INTEGER NOT NULL DEFAULT 0",
+		"codec TEXT NOT NULL DEFAULT ''",
+		"sample_rate INTEGER NOT NULL DEFAULT 0",
+		"bits INTEGER NOT NULL DEFAULT 0",
+	} {
+		name := col[:strings.IndexByte(col, ' ')]
+		if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('tracks') WHERE name = ?`, name).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			if _, err := db.Exec(`ALTER TABLE tracks ADD COLUMN ` + col); err != nil {
+				return err
+			}
+		}
+	}
+	_, err := db.Exec(`CREATE INDEX IF NOT EXISTS tracks_path ON tracks(path)`)
+	return err
 }
 
 // Close closes the database.
@@ -278,10 +321,11 @@ func (s *Store) LastSync(ctx context.Context, source string) time.Time {
 	return time.Unix(n, 0)
 }
 
-// Artists lists album artists alphabetically (compilations last).
-func (s *Store) Artists(ctx context.Context) ([]Artist, error) {
+// Artists lists the album artists of source alphabetically (compilations
+// last).
+func (s *Store) Artists(ctx context.Context, source string) ([]Artist, error) {
 	rows, err := s.db.QueryContext(ctx, `
-SELECT MIN(artist), COUNT(*) FROM albums GROUP BY artist_key ORDER BY artist_key`)
+SELECT MIN(artist), COUNT(*) FROM albums WHERE source = ? GROUP BY artist_key ORDER BY artist_key`, source)
 	if err != nil {
 		return nil, err
 	}
@@ -313,21 +357,21 @@ func scanAlbums(rows *sql.Rows) ([]Album, error) {
 	return out, rows.Err()
 }
 
-// AlbumsByArtist lists an artist's albums, oldest first. artist is matched by
-// ArtistKey, so any spelling from Artists works.
-func (s *Store) AlbumsByArtist(ctx context.Context, artist string) ([]Album, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+albumCols+` FROM albums WHERE artist_key = ?
-ORDER BY CASE WHEN year = 0 THEN 1 ELSE 0 END, year, release_date, title COLLATE NOCASE`, ArtistKey(artist))
+// AlbumsByArtist lists an artist's albums in source, oldest first. artist is
+// matched by ArtistKey, so any spelling from Artists works.
+func (s *Store) AlbumsByArtist(ctx context.Context, source, artist string) ([]Album, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+albumCols+` FROM albums WHERE source = ? AND artist_key = ?
+ORDER BY CASE WHEN year = 0 THEN 1 ELSE 0 END, year, release_date, title COLLATE NOCASE`, source, ArtistKey(artist))
 	if err != nil {
 		return nil, err
 	}
 	return scanAlbums(rows)
 }
 
-// AllAlbums lists every album, by artist then year.
-func (s *Store) AllAlbums(ctx context.Context) ([]Album, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+albumCols+` FROM albums
-ORDER BY artist_key, CASE WHEN year = 0 THEN 1 ELSE 0 END, year, title COLLATE NOCASE`)
+// AllAlbums lists every album of source, by artist then year.
+func (s *Store) AllAlbums(ctx context.Context, source string) ([]Album, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+albumCols+` FROM albums WHERE source = ?
+ORDER BY artist_key, CASE WHEN year = 0 THEN 1 ELSE 0 END, year, title COLLATE NOCASE`, source)
 	if err != nil {
 		return nil, err
 	}
@@ -358,22 +402,38 @@ func (s *Store) Tracks(ctx context.Context, albumID string) (tracks []Track, syn
 		return nil, false, err
 	}
 	rows, err := s.db.QueryContext(ctx, `
-SELECT id, album_id, catalog_id, title, artist, disc, number, duration_ms, playable FROM tracks
-WHERE album_id = ? ORDER BY disc, number, title COLLATE NOCASE`, albumID)
+SELECT `+trackCols+` FROM tracks
+WHERE album_id = ? ORDER BY disc, number, path, start_ms, title COLLATE NOCASE`, albumID)
 	if err != nil {
 		return nil, false, err
 	}
+	tracks, err = scanTracks(rows)
+	return tracks, at != 0, err
+}
+
+const trackCols = `id, album_id, catalog_id, title, artist, disc, number, duration_ms, playable,
+path, folder, cue_track, start_ms, codec, sample_rate, bits`
+
+func trackArgs(t Track) []any {
+	return []any{t.ID, t.AlbumID, t.CatalogID, t.Title, t.Artist, t.Disc, t.Number, t.Duration.Milliseconds(), t.Playable,
+		t.Path, t.Folder, t.CueTrack, t.Start.Milliseconds(), t.Codec, t.SampleRate, t.Bits}
+}
+
+func scanTracks(rows *sql.Rows) ([]Track, error) {
 	defer func() { _ = rows.Close() }()
+	var out []Track
 	for rows.Next() {
 		var t Track
-		var ms int64
-		if err := rows.Scan(&t.ID, &t.AlbumID, &t.CatalogID, &t.Title, &t.Artist, &t.Disc, &t.Number, &ms, &t.Playable); err != nil {
-			return nil, false, err
+		var ms, startMs int64
+		if err := rows.Scan(&t.ID, &t.AlbumID, &t.CatalogID, &t.Title, &t.Artist, &t.Disc, &t.Number, &ms, &t.Playable,
+			&t.Path, &t.Folder, &t.CueTrack, &startMs, &t.Codec, &t.SampleRate, &t.Bits); err != nil {
+			return nil, err
 		}
 		t.Duration = time.Duration(ms) * time.Millisecond
-		tracks = append(tracks, t)
+		t.Start = time.Duration(startMs) * time.Millisecond
+		out = append(out, t)
 	}
-	return tracks, at != 0, rows.Err()
+	return out, rows.Err()
 }
 
 // SetTracks replaces an album's cached tracks and marks them synced.
@@ -387,7 +447,7 @@ func (s *Store) SetTracks(ctx context.Context, albumID string, tracks []Track) e
 		return err
 	}
 	ins, err := tx.PrepareContext(ctx, `INSERT OR REPLACE INTO tracks
-(id, album_id, catalog_id, title, artist, disc, number, duration_ms, playable) VALUES (?,?,?,?,?,?,?,?,?)`)
+(`+trackCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return err
 	}
@@ -400,7 +460,8 @@ func (s *Store) SetTracks(ctx context.Context, albumID string, tracks []Track) e
 		return sorted[i].Number < sorted[j].Number
 	})
 	for _, t := range sorted {
-		if _, err := ins.ExecContext(ctx, t.ID, albumID, t.CatalogID, t.Title, t.Artist, t.Disc, t.Number, t.Duration.Milliseconds(), t.Playable); err != nil {
+		t.AlbumID = albumID
+		if _, err := ins.ExecContext(ctx, trackArgs(t)...); err != nil {
 			return fmt.Errorf("library: track %s: %w", t.ID, err)
 		}
 	}

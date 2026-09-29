@@ -126,7 +126,7 @@ func (m *Model) loadTracks(key string) tea.Cmd {
 
 func albumsForKey(ctx context.Context, store *library.Store, key string) ([]library.Album, error) {
 	if len(key) > len(artistKeyPrefix) && key[:len(artistKeyPrefix)] == artistKeyPrefix {
-		return store.AlbumsByArtist(ctx, key[len(artistKeyPrefix):])
+		return store.AlbumsByArtist(ctx, library.SourceApple, key[len(artistKeyPrefix):])
 	}
 	a, err := store.Album(ctx, key)
 	if err != nil {

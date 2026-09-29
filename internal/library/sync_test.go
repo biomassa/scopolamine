@@ -130,7 +130,7 @@ func testSyncAndBrowse(t *testing.T, withTotal bool) {
 		t.Fatalf("synced %d albums, want %d", n, len(albums))
 	}
 
-	artists, err := store.Artists(ctx)
+	artists, err := store.Artists(ctx, library.SourceApple)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func testSyncAndBrowse(t *testing.T, withTotal bool) {
 		t.Error("The Broadcast missing")
 	}
 
-	boc, err := store.AlbumsByArtist(ctx, "boards of canada")
+	boc, err := store.AlbumsByArtist(ctx, library.SourceApple, "boards of canada")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func testSyncAndBrowse(t *testing.T, withTotal bool) {
 	if _, err := library.SyncAppleAlbums(ctx, store, c, nil); err != nil {
 		t.Fatal(err)
 	}
-	boc, _ = store.AlbumsByArtist(ctx, "Boards of Canada")
+	boc, _ = store.AlbumsByArtist(ctx, library.SourceApple, "Boards of Canada")
 	if len(boc) != 2 || boc[0].ID != "l.boc1" || boc[1].ID != "l.new" {
 		t.Fatalf("after resync: %+v", boc)
 	}
