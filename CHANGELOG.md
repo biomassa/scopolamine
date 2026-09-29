@@ -7,6 +7,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-29
+
 ### Changed
 
 - After 10 minutes in the local library, Chrome and MusicKit shut down to free about 750 MB of memory. They stay while Apple Music plays. A paused Apple Music track becomes the resume point of the Apple Music view. Chrome and MusicKit start again when the Apple Music view shows.
@@ -107,7 +109,8 @@ License:
 
 - MIT license. Parts of the code come from vibez by Simone Pelosi (MIT license). NOTICE and THIRD_PARTY_LICENSES.md give the details.
 
-[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/biomassa/scopolamine/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/biomassa/scopolamine/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/biomassa/scopolamine/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/biomassa/scopolamine/releases/tag/v0.1.0
