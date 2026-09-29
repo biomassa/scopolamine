@@ -29,44 +29,83 @@ func (m *Model) modeLabel() string {
 	return "Apple Music"
 }
 
+// legendItem is a key of the legend and what it does. An item without a
+// key (a hint) shows only its label.
+type legendItem struct{ key, label string }
+
+func (it legendItem) width() int {
+	if it.key == "" {
+		return ansi.StringWidth(it.label)
+	}
+	return ansi.StringWidth(it.key) + 1 + ansi.StringWidth(it.label)
+}
+
+// render draws the item as in godoist: the key in the theme accent, bold;
+// the label muted.
+func (it legendItem) render() string {
+	if it.key == "" {
+		return stMuted.Render(it.label)
+	}
+	return stLegendKey.Render(it.key) + " " + stMuted.Render(it.label)
+}
+
+func keys(pairs ...string) []legendItem {
+	out := make([]legendItem, 0, len(pairs)/2)
+	for i := 0; i+1 < len(pairs); i += 2 {
+		out = append(out, legendItem{pairs[i], pairs[i+1]})
+	}
+	return out
+}
+
 // legendItems are the keys of the legend for the current view.
-func (m *Model) legendItems() []string {
+func (m *Model) legendItems() []legendItem {
 	switch {
 	case m.filtering:
-		return []string{"type to filter", "enter play", "esc clear"}
+		return append([]legendItem{{"", "type to filter"}}, keys("enter", "play", "esc", "clear")...)
 	case m.mode == modeSearch:
-		return []string{"enter play", "a add", "D remove", "s edit search", "esc library", "space pause", "←/→ seek", "+/- vol", "T theme", "? help"}
+		return keys("enter", "play", "a", "add", "D", "remove", "s", "edit search", "esc", "library", "space", "pause",
+			"←/→", "seek", "+/-", "vol", "T", "theme", "?", "help")
 	case m.source == library.SourceLocal:
-		return []string{"enter play", "space pause", "n/p track", "←/→ seek", "+/- vol", "/ filter", "v sort", "L Apple Music", "o playing", "T theme", "? help"}
+		return keys("enter", "play", "space", "pause", "n/p", "track", "←/→", "seek", "+/-", "vol", "/", "filter",
+			"v", "sort", "L", "Apple Music", "o", "playing", "T", "theme", "?", "help")
 	}
-	items := []string{"enter play", "space pause", "n/p track", "←/→ seek", "+/- vol", "/ filter", "s search", "D remove"}
+	items := keys("enter", "play", "space", "pause", "n/p", "track", "←/→", "seek", "+/-", "vol", "/", "filter",
+		"s", "search", "D", "remove")
 	if m.deps.ScanLocal != nil {
-		items = append(items, "L local")
+		items = append(items, legendItem{"L", "local"})
 	}
-	return append(items, "o playing", "T theme", "? help")
+	return append(items, keys("o", "playing", "T", "theme", "?", "help")...)
 }
 
 // legendLines lays the legend items out on one line, or on two when they do
 // not fit, as in godoist. Items that do not fit on the first line start the
 // second one.
-func (m *Model) legendLines() []string {
-	const sep = " · "
+func (m *Model) legendLines() [][]legendItem {
+	const sepW = 3 // " · "
 	width := max(10, m.width-1)
-	lines := []string{""}
+	lines := [][]legendItem{nil}
+	w := 0
 	for _, it := range m.legendItems() {
-		cur := &lines[len(lines)-1]
+		cur := len(lines) - 1
 		switch {
-		case *cur == "":
-			*cur = it
-		case ansi.StringWidth(*cur+sep+it) <= width:
-			*cur += sep + it
-		case len(lines) < 2:
-			lines = append(lines, it)
+		case len(lines[cur]) == 0:
+			lines[cur], w = append(lines[cur], it), it.width()
+		case w+sepW+it.width() <= width || len(lines) == 2:
+			lines[cur], w = append(lines[cur], it), w+sepW+it.width() // the second line is cut by fit
 		default:
-			*cur += sep + it // the second line is cut by fit
+			lines, w = append(lines, []legendItem{it}), it.width()
 		}
 	}
 	return lines
+}
+
+// legendText draws one legend line.
+func legendText(items []legendItem) string {
+	parts := make([]string, len(items))
+	for i, it := range items {
+		parts[i] = it.render()
+	}
+	return strings.Join(parts, stDim.Render(" · "))
 }
 
 // --- labels ---------------------------------------------------------------
@@ -444,7 +483,7 @@ func (m *Model) renderBar() string {
 		case status != "":
 			b.WriteString(strings.Repeat(" ", w)) // keep the bar height
 		default:
-			b.WriteString(fit(stDim.Render(" "+l), w))
+			b.WriteString(fit(" "+legendText(l), w))
 		}
 	}
 	return b.String()

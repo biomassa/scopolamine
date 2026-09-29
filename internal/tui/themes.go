@@ -77,10 +77,11 @@ var (
 
 // The colors of the theme in use.
 var (
-	hexAccent, hexText, hexDim, hexSelBg, hexSelText, hexSep, hexErr string
+	hexAccent, hexText, hexDim, hexMuted, hexSelBg, hexSelText, hexSep, hexErr string
 
 	stTitle, stTitleFocus, stRow, stDim, stSel, stSelFocus lipgloss.Style
 	stPlaying, stSep, stErr, stBold, stHeader              lipgloss.Style
+	stLegendKey, stMuted                                   lipgloss.Style
 )
 
 func init() { ApplyTheme(defaultTheme) }
@@ -89,7 +90,7 @@ func init() { ApplyTheme(defaultTheme) }
 // "scopolamine" theme.
 func ApplyTheme(name string) {
 	themeName, themeBg = defaultTheme, ""
-	hexAccent, hexText, hexDim = "#d7af5f", "#d0d0d0", "#6c6c6c"
+	hexAccent, hexText, hexDim, hexMuted = "#d7af5f", "#d0d0d0", "#6c6c6c", "#8a8a8a"
 	hexSelBg, hexSelText, hexSep, hexErr = "#3a3a3a", "#1c1c1c", "#444444", "#e06c75"
 	for _, p := range palettes {
 		if p.name == name {
@@ -107,6 +108,7 @@ func applyPalette(p palette) {
 	hexAccent = readable(p.focus, p.bg, 3)
 	hexText = p.fg
 	hexDim = readable(p.dimmed, p.bg, 3)
+	hexMuted = readable(mix(p.fg, p.bg, 0.4), p.bg, 4.5)
 	hexSelBg = mix(p.selected, p.bg, 0.72)
 	hexSep = p.border
 	hexErr = readable(p.errorHex, p.bg, 3)
@@ -131,6 +133,8 @@ func buildStyles() {
 	stErr = c(hexErr)
 	stBold = c(hexText).Bold(true)
 	stHeader = c(hexAccent).Bold(true)
+	stLegendKey = c(hexAccent).Bold(true)
+	stMuted = c(hexMuted)
 }
 
 // themeLabel is the name shown in the picker.

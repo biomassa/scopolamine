@@ -404,10 +404,15 @@ func TestLegendWraps(t *testing.T) {
 		}
 		if width >= 110 {
 			for _, it := range m.legendItems() {
-				if !strings.Contains(s, it) {
-					t.Fatalf("width %d: legend lost %q:\n%s", width, it, s)
+				if !strings.Contains(s, it.key+" "+it.label) {
+					t.Fatalf("width %d: legend lost %q:\n%s", width, it.key+" "+it.label, s)
 				}
 			}
+		}
+		// The keys use the theme accent, bold, and the labels the muted color.
+		raw := m.View().Content
+		if !strings.Contains(raw, stLegendKey.Render("enter")) || !strings.Contains(raw, stMuted.Render("play")) {
+			t.Fatalf("width %d: legend keys not in the accent", width)
 		}
 	}
 }
