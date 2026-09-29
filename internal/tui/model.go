@@ -51,9 +51,14 @@ type Deps struct {
 
 	// ScanLocal scans the local library folder (nil: no local mode).
 	ScanLocal func(ctx context.Context, progress func(done, total int)) (changed int, err error)
-	// StartApple starts the Apple Music player when the Apple view is first
-	// shown and the player is not started yet (nil: nothing to start).
+	// StartApple starts the Apple Music player when the Apple view shows and
+	// the player does not run (nil: nothing to start). It returns at once;
+	// a PlayerReadyMsg or PlayerFailedMsg follows.
 	StartApple func()
+	// StopApple shuts the Apple Music player down after appleIdleAfter in
+	// the local view (nil: it never shuts down). It returns when the player
+	// has shut down.
+	StopApple func()
 }
 
 // Messages sent in from outside (see cmd/scopolamine).
@@ -188,6 +193,10 @@ type Model struct {
 	coverLoading map[string]bool
 
 	themes *themePicker // the open theme picker, or nil
+
+	appleState   int  // appleOff, appleStarting, appleReady, or appleStopping
+	appleIdleSeq int  // the number of the idle timer that counts
+	appleIdleDue bool // the idle time is over; stop when no Apple Music plays
 }
 
 type pendingPlay struct {
@@ -251,16 +260,12 @@ func (m *Model) inView(v *libView, f func() tea.Cmd) tea.Cmd {
 // showView makes v the view in use and loads it the first time.
 func (m *Model) showView(v *libView) tea.Cmd {
 	m.libView = v
-	if v.source == library.SourceApple && m.deps.StartApple != nil {
-		start := m.deps.StartApple
-		m.deps.StartApple = nil // once
-		start()
-	}
+	idle := m.appleOnShow(v)
 	if v.loaded {
-		return nil
+		return idle
 	}
 	v.loaded = true
-	return tea.Batch(m.loadArtists(), m.loadResumeInfo())
+	return tea.Batch(idle, m.loadArtists(), m.loadResumeInfo())
 }
 
 // startSync syncs the view's library: the Apple Music album list, or a
@@ -464,12 +469,27 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case PlayerReadyMsg:
 		m.playerStatus = ""
+		m.appleState = appleReady
+		idle := m.armAppleIdle() // the local view shows already
+		if m.source == library.SourceApple {
+			idle = nil
+		}
 		if msg.Player != nil && m.deps.Player == nil {
 			m.deps.Player = msg.Player
 			_ = msg.Player.SetVolume(m.volume)
-			return m, m.watchPlayer()
+			return m, tea.Batch(idle, m.watchPlayer())
 		}
-		return m, nil
+		return m, idle
+
+	case appleIdleMsg:
+		if msg.seq != m.appleIdleSeq {
+			return m, nil // the Apple view showed in the meantime
+		}
+		m.appleIdleDue = true
+		return m, m.maybeStopApple()
+
+	case appleStoppedMsg:
+		return m, m.onAppleStopped()
 
 	case PlayerFailedMsg:
 		m.playerStatus = "playback unavailable"
@@ -481,7 +501,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.playerStatus = "player stopped"
 			return m, nil
 		}
-		return m, tea.Batch(m.applyState(msg.s), m.stateCh)
+		return m, tea.Batch(m.applyState(msg.s), m.maybeStopApple(), m.stateCh)
 
 	case resumeInfoMsg:
 		return m, m.inView(m.view(msg.src), func() tea.Cmd { m.onResumeInfo(msg); return nil })
@@ -747,12 +767,7 @@ func (m *Model) playTracks(tracks []library.Track, albums []library.Album, start
 	// The other mode's music stops: it keeps its track and position as its
 	// resume point.
 	if pv := m.playingView(); pv != nil && pv != m.libView {
-		pv.resume = m.playingResume()
-		if pv.resume != nil {
-			if t, ok := m.findTrack(pv, pv.resume.trackID); ok {
-				pv.resume.track = &t
-			}
-		}
+		m.keepResume(pv)
 	}
 	// enter on this mode's resume track continues at the saved position.
 	if r := m.resume; r != nil && ids[start] == r.trackID && r.pos > 2*time.Second && m.playingView() != m.libView {

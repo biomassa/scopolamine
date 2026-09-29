@@ -9,6 +9,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 
+- After 10 minutes in the local library, Chrome and MusicKit shut down to free about 750 MB of memory. They stay while Apple Music plays. A paused Apple Music track becomes the resume point of the Apple Music view. Chrome and MusicKit start again when the Apple Music view shows.
 - In the search, singles show in the normal color; only the `single` tag at the right is pale.
 - `]` and `[` go to the next and the previous track; the legends show `[ ] track`. `n` `p` and `>` `<` still work.
 

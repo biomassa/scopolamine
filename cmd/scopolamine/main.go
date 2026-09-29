@@ -316,9 +316,11 @@ func runTUI(ctx context.Context, offline bool, themeOverride string) error {
 	var (
 		mu      sync.Mutex
 		stopped bool
+		apple   *cdp.Player // the running Apple Music player, or nil
 	)
 	if !offline {
-		// Chrome and MusicKit start when the Apple Music view first shows.
+		// Chrome and MusicKit start when the Apple Music view shows, and shut
+		// down after some time in the local view.
 		deps.StartApple = func() {
 			go func() {
 				p, err := startPlayer(ctx, cfg, dt, func(s string) { prog.Send(tui.PlayerStatusMsg(s)) })
@@ -334,9 +336,22 @@ func runTUI(ctx context.Context, offline bool, themeOverride string) error {
 					go prog.Send(tui.PlayerFailedMsg{Err: err})
 					return
 				}
+				apple = p
 				rt.Attach(router.Apple, p)
 				go prog.Send(tui.PlayerReadyMsg{})
 			}()
+		}
+		deps.StopApple = func() {
+			mu.Lock()
+			p := apple
+			apple = nil
+			if p != nil {
+				rt.Detach(router.Apple)
+			}
+			mu.Unlock()
+			if p != nil {
+				_ = p.Close()
+			}
 		}
 	}
 

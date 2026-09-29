@@ -154,7 +154,7 @@ Each local album row shows the format of the album at the right, in a pale color
 
 The local player is mpv, which scopolamine controls through its IPC socket. mpv runs without your mpv configuration and without scripts. It plays gapless and applies the album ReplayGain (the track ReplayGain when the album has none). The volume is the same for both modes.
 
-In the local library, `s` and `D` do nothing. Chrome and MusicKit start only when the Apple Music view shows for the first time.
+In the local library, `s` and `D` do nothing. Chrome and MusicKit start only when the Apple Music view shows. They use about 750 MB of memory. After 10 minutes in the local library, they shut down, but not while Apple Music plays. A paused Apple Music track becomes the resume point of the Apple Music view. When the Apple Music view shows again, Chrome and MusicKit start again.
 
 ### Album covers
 

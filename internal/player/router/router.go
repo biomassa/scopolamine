@@ -53,7 +53,26 @@ func (r *Router) Attach(name string, p player.Player) {
 	v := r.volume
 	r.mu.Unlock()
 	_ = p.SetVolume(v)
-	go r.forward(name, ch)
+	go r.forward(name, p, ch)
+}
+
+// Detach removes the engine name and returns it, or nil. It does not close
+// the engine. If the engine was the active one, nothing plays now.
+func (r *Router) Detach(name string) player.Player {
+	r.mu.Lock()
+	p := r.engines[name]
+	delete(r.engines, name)
+	wasActive := p != nil && r.active == name
+	if wasActive {
+		r.active = ""
+		r.last = player.State{QueueIndex: -1, Volume: r.volume}
+	}
+	s := r.last
+	r.mu.Unlock()
+	if wasActive {
+		r.bcast.Send(s)
+	}
+	return p
 }
 
 // Has reports whether the engine name is attached.
@@ -70,10 +89,14 @@ func (r *Router) Active() string {
 	return r.active
 }
 
-func (r *Router) forward(name string, ch <-chan player.State) {
+func (r *Router) forward(name string, p player.Player, ch <-chan player.State) {
 	for s := range ch {
 		s.Local = name == Local
 		r.mu.Lock()
+		if r.engines[name] != p { // detached
+			r.mu.Unlock()
+			continue
+		}
 		active := r.active == name
 		if active {
 			r.last = s
@@ -90,9 +113,11 @@ func (r *Router) forward(name string, ch <-chan player.State) {
 		}
 	}
 	r.mu.Lock()
-	delete(r.engines, name)
-	if r.active == name {
-		r.active = ""
+	if r.engines[name] == p { // not detached or replaced
+		delete(r.engines, name)
+		if r.active == name {
+			r.active = ""
+		}
 	}
 	r.mu.Unlock()
 }

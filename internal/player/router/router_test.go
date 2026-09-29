@@ -103,3 +103,48 @@ func TestRouter(t *testing.T) {
 	}
 	_ = r.Close()
 }
+
+func TestDetach(t *testing.T) {
+	r := New(0.6)
+	apple := &fake{}
+	ch := r.Subscribe()
+	r.Attach(Apple, apple)
+	if err := r.PlayTracks([]string{"i.abc"}, 0); err != nil {
+		t.Fatal(err)
+	}
+	apple.bc.Send(player.State{Track: &player.NowPlaying{ID: "i.abc"}})
+	recv(t, ch)
+
+	// Detaching the active engine: nothing plays, and the state says so.
+	if p := r.Detach(Apple); p != apple {
+		t.Fatalf("Detach = %v", p)
+	}
+	if s := recv(t, ch); s.Track != nil || s.QueueIndex != -1 || s.Volume != 0.6 {
+		t.Fatalf("state after detach: %+v", s)
+	}
+	if r.Active() != "" || r.Has(Apple) {
+		t.Fatal("engine still attached")
+	}
+	if err := r.PlayTracks([]string{"i.abc"}, 0); err != ErrNotStarted {
+		t.Fatalf("err = %v", err)
+	}
+	if r.Detach(Apple) != nil {
+		t.Fatal("second detach returned an engine")
+	}
+
+	// A new engine under the same name stays when the old one closes late.
+	apple2 := &fake{}
+	r.Attach(Apple, apple2)
+	apple.bc.Send(player.State{Track: &player.NowPlaying{ID: "i.old"}, Error: "old"})
+	_ = apple.Close()
+	time.Sleep(50 * time.Millisecond)
+	if !r.Has(Apple) {
+		t.Fatal("old engine's close removed the new engine")
+	}
+	select {
+	case s := <-ch:
+		t.Fatalf("detached engine's state forwarded: %+v", s)
+	default:
+	}
+	_ = r.Close()
+}

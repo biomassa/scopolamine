@@ -220,6 +220,17 @@ func (m *Model) playingResume() *resumePoint {
 	return &resumePoint{albumID: m.playingAlbum.ID, trackID: m.state.Track.ID, pos: m.state.Position, album: m.playingAlbum}
 }
 
+// keepResume makes what plays now the resume point of pv, when its music
+// stops.
+func (m *Model) keepResume(pv *libView) {
+	pv.resume = m.playingResume()
+	if pv.resume != nil {
+		if t, ok := m.findTrack(pv, pv.resume.trackID); ok {
+			pv.resume.track = &t
+		}
+	}
+}
+
 // Session captures the state of both modes for the next start.
 func (m *Model) Session() Session {
 	s := Session{LastMode: m.source}
