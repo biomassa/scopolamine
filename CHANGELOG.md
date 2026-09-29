@@ -7,6 +7,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-29
+
 ### Added
 
 - A local library mode for the music files in a folder: `local_root` in the config file, or `~/Music`. `L` switches between Apple Music and the local library. Each mode keeps its selection, and the music plays on when you switch. `v` sorts the local library by metadata (album artists, albums, tracks; the default) or by folders (top folders, album folders, files). The status bar shows the mode and the format of the track that plays, for example `local · metadata · FLAC 44.1/16`.
@@ -95,6 +97,7 @@ License:
 
 - MIT license. Parts of the code come from vibez by Simone Pelosi (MIT license). NOTICE and THIRD_PARTY_LICENSES.md give the details.
 
-[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/biomassa/scopolamine/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/biomassa/scopolamine/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/biomassa/scopolamine/releases/tag/v0.1.0
