@@ -1,0 +1,194 @@
+// Package router puts the Apple Music and the local-file players behind one
+// player.Player. The TUI and MPRIS talk to the router; it forwards each
+// command to the engine that plays.
+package router
+
+import (
+	"errors"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/biomassa/scopolamine/internal/player"
+)
+
+// Engine names.
+const (
+	Apple = "apple"
+	Local = "local"
+)
+
+// LocalIDPrefix starts the ids of local tracks (library.LocalTrackID).
+const LocalIDPrefix = "file:"
+
+// ErrNotStarted means the engine for the tracks is not (yet) attached.
+var ErrNotStarted = errors.New("player not started")
+
+// Router is a player.Player over the attached engines.
+type Router struct {
+	mu      sync.Mutex
+	engines map[string]player.Player
+	active  string // the engine that plays, or ""
+	volume  float64
+	last    player.State // the last state of the active engine
+
+	bcast player.Broadcast
+}
+
+var _ player.Player = (*Router)(nil)
+
+// New returns a router without engines.
+func New(volume float64) *Router {
+	if volume <= 0 {
+		volume = 1
+	}
+	return &Router{engines: map[string]player.Player{}, volume: volume, last: player.State{QueueIndex: -1, Volume: volume}}
+}
+
+// Attach adds an engine under name and forwards its states.
+func (r *Router) Attach(name string, p player.Player) {
+	ch := p.Subscribe()
+	r.mu.Lock()
+	r.engines[name] = p
+	v := r.volume
+	r.mu.Unlock()
+	_ = p.SetVolume(v)
+	go r.forward(name, ch)
+}
+
+// Has reports whether the engine name is attached.
+func (r *Router) Has(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.engines[name] != nil
+}
+
+// Active returns the engine that plays, or "".
+func (r *Router) Active() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.active
+}
+
+func (r *Router) forward(name string, ch <-chan player.State) {
+	for s := range ch {
+		s.Local = name == Local
+		r.mu.Lock()
+		active := r.active == name
+		if active {
+			r.last = s
+		}
+		base := r.last
+		r.mu.Unlock()
+		switch {
+		case active:
+			r.bcast.Send(s)
+		case s.Error != "" || s.Log != "" || s.NeedsAuth:
+			// A notice of the other engine; the state stays the active one's.
+			base.Error, base.Log, base.NeedsAuth, base.SkippedID = s.Error, s.Log, s.NeedsAuth, ""
+			r.bcast.Send(base)
+		}
+	}
+	r.mu.Lock()
+	delete(r.engines, name)
+	if r.active == name {
+		r.active = ""
+	}
+	r.mu.Unlock()
+}
+
+// engineFor returns the engine for track ids.
+func engineFor(ids []string) string {
+	if len(ids) > 0 && strings.HasPrefix(ids[0], LocalIDPrefix) {
+		return Local
+	}
+	return Apple
+}
+
+// PlayTracks plays ids on their engine. The other engine stops.
+func (r *Router) PlayTracks(ids []string, start int) error {
+	name := engineFor(ids)
+	r.mu.Lock()
+	p := r.engines[name]
+	var others []player.Player
+	for n, e := range r.engines {
+		if n != name {
+			others = append(others, e)
+		}
+	}
+	if p != nil {
+		r.active = name
+	}
+	r.mu.Unlock()
+	if p == nil {
+		return ErrNotStarted
+	}
+	for _, o := range others {
+		_ = o.Stop()
+	}
+	return p.PlayTracks(ids, start)
+}
+
+func (r *Router) activePlayer() player.Player {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.engines[r.active]
+}
+
+func (r *Router) do(f func(player.Player) error) error {
+	p := r.activePlayer()
+	if p == nil {
+		return nil // nothing plays: nothing to control
+	}
+	return f(p)
+}
+
+func (r *Router) Play() error     { return r.do(player.Player.Play) }
+func (r *Router) Pause() error    { return r.do(player.Player.Pause) }
+func (r *Router) Toggle() error   { return r.do(player.Player.Toggle) }
+func (r *Router) Stop() error     { return r.do(player.Player.Stop) }
+func (r *Router) Next() error     { return r.do(player.Player.Next) }
+func (r *Router) Previous() error { return r.do(player.Player.Previous) }
+
+func (r *Router) Seek(pos time.Duration) error {
+	return r.do(func(p player.Player) error { return p.Seek(pos) })
+}
+
+// SetVolume sets the one volume of both engines.
+func (r *Router) SetVolume(v float64) error {
+	r.mu.Lock()
+	r.volume = v
+	engines := make([]player.Player, 0, len(r.engines))
+	for _, e := range r.engines {
+		engines = append(engines, e)
+	}
+	r.mu.Unlock()
+	for _, e := range engines {
+		_ = e.SetVolume(v)
+	}
+	return nil
+}
+
+// State is the state of the engine that plays.
+func (r *Router) State() player.State {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.last
+}
+
+func (r *Router) Subscribe() <-chan player.State { return r.bcast.Subscribe() }
+
+// Close closes all engines.
+func (r *Router) Close() error {
+	r.mu.Lock()
+	engines := make([]player.Player, 0, len(r.engines))
+	for _, e := range r.engines {
+		engines = append(engines, e)
+	}
+	r.mu.Unlock()
+	for _, e := range engines {
+		_ = e.Close()
+	}
+	r.bcast.Close()
+	return nil
+}

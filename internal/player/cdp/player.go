@@ -208,6 +208,10 @@ func (p *Player) apply(js jsState) {
 	s.Position = time.Duration(js.CurrentTime * float64(time.Second))
 	s.Volume = js.Volume
 	s.BitrateKbps = js.Bitrate
+	s.Format = "AAC 256" // the maximum of MusicKit JS, which scopolamine always asks for
+	if js.Bitrate > 0 {
+		s.Format = fmt.Sprintf("AAC %d", js.Bitrate)
+	}
 	s.QueueIndex = js.QueueIndex
 	s.QueueLength = js.QueueLength
 	s.Track = nil
