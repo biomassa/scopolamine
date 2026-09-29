@@ -13,7 +13,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -121,6 +123,43 @@ func (m *Manager) load(ctx context.Context, url string) ([]byte, error) {
 	if b, err := os.ReadFile(path); err == nil && len(b) > 0 { //nolint:gosec // our cache
 		return b, nil
 	}
+	src, err := m.open(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+	img, _, err := image.Decode(bytes.NewReader(src))
+	if err != nil {
+		return nil, fmt.Errorf("cover: %w", err)
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, scaleDown(img, maxSide)); err != nil {
+		return nil, err
+	}
+	if os.MkdirAll(m.dir, 0o750) == nil {
+		_ = os.WriteFile(path, buf.Bytes(), 0o600)
+	}
+	return buf.Bytes(), nil
+}
+
+// open returns the image data of url: an http(s) URL, "file:" and a path
+// (an image file), or "embedded:" and a path (the picture embedded in an
+// audio file, extracted with ffmpeg).
+func (m *Manager) open(ctx context.Context, url string) ([]byte, error) {
+	if path, ok := strings.CutPrefix(url, "file:"); ok {
+		return os.ReadFile(path) //nolint:gosec // an image in the music folder
+	}
+	if path, ok := strings.CutPrefix(url, "embedded:"); ok {
+		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		// stdin and stderr stay nil (/dev/null), away from the TUI.
+		cmd := exec.CommandContext(ctx, "ffmpeg", "-v", "error", "-i", path, "-map", "0:v:0", "-frames:v", "1", //nolint:gosec // our paths
+			"-f", "image2pipe", "-c:v", "png", "-")
+		out, err := cmd.Output()
+		if err != nil || len(out) == 0 {
+			return nil, fmt.Errorf("cover: no embedded picture in %s", path)
+		}
+		return out, nil
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -133,18 +172,7 @@ func (m *Manager) load(ctx context.Context, url string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("cover: %s", resp.Status)
 	}
-	img, _, err := image.Decode(io.LimitReader(resp.Body, 16<<20))
-	if err != nil {
-		return nil, fmt.Errorf("cover: %w", err)
-	}
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, scaleDown(img, maxSide)); err != nil {
-		return nil, err
-	}
-	if os.MkdirAll(m.dir, 0o750) == nil {
-		_ = os.WriteFile(path, buf.Bytes(), 0o600)
-	}
-	return buf.Bytes(), nil
+	return io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 }
 
 // Place returns the image id for the cover of url at cols×rows cells, and

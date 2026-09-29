@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -13,17 +14,28 @@ import (
 	"github.com/biomassa/scopolamine/internal/player"
 )
 
-// Session is what is restored on the next start: where the cursor was, and
-// what was playing (resumed with space, never automatically).
-type Session struct {
+// ViewSession is what is restored for one mode: where the cursor was, and
+// what was playing (resumed with space or enter, never automatically).
+type ViewSession struct {
 	Focus   int    `json:"focus"`
 	Artist  string `json:"artist,omitempty"`
 	AlbumID string `json:"album_id,omitempty"`
 	TrackID string `json:"track_id,omitempty"`
+	Folders bool   `json:"folders,omitempty"` // local: folder sorting
 
 	PlayAlbumID string  `json:"play_album_id,omitempty"`
 	PlayTrackID string  `json:"play_track_id,omitempty"`
 	PlayPosSec  float64 `json:"play_pos_sec,omitempty"`
+}
+
+// Session is restored on the next start: the mode that showed, and the
+// state of each mode. The embedded ViewSession reads the files of version
+// 0.2, which had only the Apple Music mode.
+type Session struct {
+	LastMode string       `json:"last_mode,omitempty"`
+	Apple    *ViewSession `json:"apple,omitempty"`
+	Local    *ViewSession `json:"local,omitempty"`
+	ViewSession
 }
 
 // LoadSession reads path; a missing or unreadable file yields nil.
@@ -64,6 +76,7 @@ type resumePoint struct {
 }
 
 type resumeInfoMsg struct {
+	src   string
 	album library.Album
 	track library.Track
 	ok    bool
@@ -79,9 +92,26 @@ func (m *Model) applySession(s *Session) {
 	if s == nil {
 		return
 	}
+	apple := s.Apple
+	if apple == nil && s.LastMode == "" {
+		legacy := s.ViewSession // a 0.2 session
+		apple = &legacy
+	}
+	m.inView(m.apple, func() tea.Cmd { m.applyViewSession(apple); return nil })
+	m.inView(m.local, func() tea.Cmd { m.applyViewSession(s.Local); return nil })
+	if s.LastMode == library.SourceLocal && m.deps.ScanLocal != nil {
+		m.libView = m.local
+	}
+}
+
+func (m *Model) applyViewSession(s *ViewSession) {
+	if s == nil {
+		return
+	}
 	if s.Focus >= 0 && s.Focus < numPanes {
 		m.focus = s.Focus
 	}
+	m.folders = s.Folders && m.source == library.SourceLocal
 	m.wantArtist, m.wantAlbum, m.wantTrack = s.Artist, s.AlbumID, s.TrackID
 	if s.PlayAlbumID != "" && s.PlayTrackID != "" {
 		m.resume = &resumePoint{
@@ -92,28 +122,36 @@ func (m *Model) applySession(s *Session) {
 	}
 }
 
-// loadResumeInfo looks up the resumable track in the cache for the bar.
+// loadResumeInfo looks up the resumable track of the view in the cache for
+// the bar.
 func (m *Model) loadResumeInfo() tea.Cmd {
 	r := m.resume
 	if r == nil {
 		return nil
 	}
-	store := m.deps.Store
+	store, src, folders := m.deps.Store, m.source, m.folders
 	return func() tea.Msg {
-		a, err := store.Album(m.ctx, r.albumID)
-		if err != nil {
-			return resumeInfoMsg{}
+		ctx := context.WithoutCancel(m.ctx)
+		albums, err := albumsForKey(ctx, store, src, folders, r.albumID)
+		if err != nil || len(albums) != 1 {
+			return resumeInfoMsg{src: src}
 		}
-		tracks, _, err := store.Tracks(context.WithoutCancel(m.ctx), r.albumID)
+		a := albums[0]
+		var tracks []library.Track
+		if strings.HasPrefix(a.ID, library.FolderPrefix) {
+			tracks, err = folderTracks(ctx, store, a)
+		} else {
+			tracks, _, err = store.Tracks(ctx, a.ID)
+		}
 		if err != nil {
-			return resumeInfoMsg{}
+			return resumeInfoMsg{src: src}
 		}
 		for _, t := range tracks {
 			if t.ID == r.trackID {
-				return resumeInfoMsg{album: a, track: t, ok: true}
+				return resumeInfoMsg{src: src, album: a, track: t, ok: true}
 			}
 		}
-		return resumeInfoMsg{}
+		return resumeInfoMsg{src: src}
 	}
 }
 
@@ -137,7 +175,6 @@ func (m *Model) resumePlayback() tea.Cmd {
 	if m.deps.Player == nil {
 		return m.flash("player not ready yet", true)
 	}
-	m.resume = nil
 	if r.pos > 2*time.Second {
 		m.pendingSeek = &seekTarget{trackID: r.trackID, pos: r.pos}
 	}
@@ -163,23 +200,53 @@ func (m *Model) maybeSeek(s player.State) {
 	}
 }
 
-// Session captures the current position for the next start.
+// playingView is the view whose library plays now, or nil (nothing plays,
+// or an album from the search plays).
+func (m *Model) playingView() *libView {
+	if m.state.Track == nil || m.playingAlbum.ID == "" || m.playingAlbum.Source == SourceCatalog {
+		return nil
+	}
+	if m.state.Local {
+		return m.local
+	}
+	return m.apple
+}
+
+// playingResume is the resume point of what plays now.
+func (m *Model) playingResume() *resumePoint {
+	if m.playingView() == nil {
+		return nil
+	}
+	return &resumePoint{albumID: m.playingAlbum.ID, trackID: m.state.Track.ID, pos: m.state.Position, album: m.playingAlbum}
+}
+
+// Session captures the state of both modes for the next start.
 func (m *Model) Session() Session {
-	s := Session{Focus: m.focus, Artist: m.selectedArtist(), AlbumID: m.selectedAlbumID()}
-	if m.allAlbumsSelected() {
-		s.AlbumID = sessionAllAlbums
-	}
-	if i := m.panes[paneTracks].selected(); i >= 0 && i < len(m.trackRows) && m.trackRows[i].kind == rowTrack {
-		s.TrackID = m.tracks[m.trackRows[i].track].ID
-	}
-	switch {
-	case m.state.Track != nil && m.playingAlbum.ID != "":
-		s.PlayAlbumID = m.playingAlbum.ID
-		s.PlayTrackID = m.state.Track.ID
-		s.PlayPosSec = m.state.Position.Seconds()
-	case m.resume != nil:
-		// Nothing was played this time: keep offering the old resume point.
-		s.PlayAlbumID, s.PlayTrackID, s.PlayPosSec = m.resume.albumID, m.resume.trackID, m.resume.pos.Seconds()
-	}
+	s := Session{LastMode: m.source}
+	s.Apple = m.viewSession(m.apple)
+	s.Local = m.viewSession(m.local)
 	return s
+}
+
+func (m *Model) viewSession(v *libView) *ViewSession {
+	var out *ViewSession
+	m.inView(v, func() tea.Cmd {
+		s := &ViewSession{Focus: m.focus, Artist: m.selectedArtist(), AlbumID: m.selectedAlbumID(), Folders: m.folders}
+		if m.allAlbumsSelected() {
+			s.AlbumID = sessionAllAlbums
+		}
+		if i := m.panes[paneTracks].selected(); i >= 0 && i < len(m.trackRows) && m.trackRows[i].kind == rowTrack {
+			s.TrackID = m.tracks[m.trackRows[i].track].ID
+		}
+		r := m.resume
+		if m.playingView() == v {
+			r = m.playingResume()
+		}
+		if r != nil {
+			s.PlayAlbumID, s.PlayTrackID, s.PlayPosSec = r.albumID, r.trackID, r.pos.Seconds()
+		}
+		out = s
+		return nil
+	})
+	return out
 }

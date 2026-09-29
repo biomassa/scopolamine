@@ -28,6 +28,9 @@ type Config struct {
 	Volume float64 `json:"volume,omitempty"`
 	// Theme is the color theme (see the theme picker, T).
 	Theme string `json:"theme,omitempty"`
+	// LocalRoot is the folder of the local library. Empty means the music
+	// folder of the user (XDG_MUSIC_DIR, else ~/Music).
+	LocalRoot string `json:"local_root,omitempty"`
 
 	path string
 }
@@ -52,6 +55,24 @@ func CacheDir() string {
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".cache", appName)
+}
+
+// MusicDir is the default local library folder: $XDG_MUSIC_DIR, else
+// ~/Music.
+func MusicDir() string {
+	if d := os.Getenv("XDG_MUSIC_DIR"); d != "" {
+		return d
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, "Music")
+}
+
+// LocalLibrary is the local library folder of c.
+func (c *Config) LocalLibrary() string {
+	if c.LocalRoot != "" {
+		return c.LocalRoot
+	}
+	return MusicDir()
 }
 
 // DefaultPath is the config file location.

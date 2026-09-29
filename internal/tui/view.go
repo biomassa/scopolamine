@@ -20,6 +20,15 @@ func (m *Model) barHeight() int { return 3 + len(m.legendLines()) }
 
 func (m *Model) listHeight() int { return max(1, m.height-m.barHeight()-1) }
 
+// modeLabel names the mode that shows: "Apple Music", "local · metadata",
+// or "local · folders".
+func (m *Model) modeLabel() string {
+	if m.source == library.SourceLocal {
+		return "local · " + m.sortName()
+	}
+	return "Apple Music"
+}
+
 // legendItems are the keys of the legend for the current view.
 func (m *Model) legendItems() []string {
 	switch {
@@ -27,8 +36,14 @@ func (m *Model) legendItems() []string {
 		return []string{"type to filter", "enter play", "esc clear"}
 	case m.mode == modeSearch:
 		return []string{"enter play", "a add", "D remove", "s edit search", "esc library", "space pause", "←/→ seek", "+/- vol", "T theme", "? help"}
+	case m.source == library.SourceLocal:
+		return []string{"enter play", "space pause", "n/p track", "←/→ seek", "+/- vol", "/ filter", "v sort", "L Apple Music", "o playing", "T theme", "? help"}
 	}
-	return []string{"enter play", "space pause", "n/p track", "←/→ seek", "+/- vol", "/ filter", "s search", "D remove", "o playing", "T theme", "? help"}
+	items := []string{"enter play", "space pause", "n/p track", "←/→ seek", "+/- vol", "/ filter", "s search", "D remove"}
+	if m.deps.ScanLocal != nil {
+		items = append(items, "L local")
+	}
+	return append(items, "o playing", "T theme", "? help")
 }
 
 // legendLines lays the legend items out on one line, or on two when they do
@@ -385,11 +400,12 @@ func (m *Model) renderBar() string {
 		dur = s.Track.Duration
 	}
 	elapsed, total := fmtDur(s.Position), fmtDur(dur)
-	quality := "AAC 256"
-	if s.BitrateKbps > 0 {
-		quality = fmt.Sprintf("AAC %d", s.BitrateKbps)
+	// The mode that shows, then the format of what plays.
+	label := m.modeLabel()
+	if s.Track != nil && s.Format != "" && !resuming {
+		label += " · " + s.Format
 	}
-	right := fmt.Sprintf("  %s  %s  vol %d%% ", total, quality, int(m.volume*100+0.5))
+	right := fmt.Sprintf("  %s  %s  vol %d%% ", total, label, int(m.volume*100+0.5))
 	left := " " + elapsed + "  "
 	barW := max(0, w-lipgloss.Width(left)-lipgloss.Width(right))
 	filled := 0
@@ -450,11 +466,13 @@ func (m *Model) renderHelp() string {
 		{"+  -", "volume"},
 		{"x", "stop"},
 		{"o", "jump to what is playing"},
-		{"R", "re-sync library from Apple Music"},
+		{"R", "sync the Apple Music library, or scan the local folder"},
 		{"s", "search Apple Music (esc returns to the library)"},
 		{"a", "in search: add the album to your library"},
 		{"D", "remove the album from your library (asks first)"},
 		{"T", "choose a color theme (live preview, enter keeps it)"},
+		{"L", "switch between Apple Music and the local library"},
+		{"v", "local library: sort by metadata or by folders"},
 		{"q  ctrl+c", "quit"},
 	}
 	var b strings.Builder

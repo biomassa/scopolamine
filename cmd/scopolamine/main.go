@@ -22,8 +22,12 @@ import (
 	"github.com/biomassa/scopolamine/internal/cover"
 	"github.com/biomassa/scopolamine/internal/devtoken"
 	"github.com/biomassa/scopolamine/internal/library"
+	"github.com/biomassa/scopolamine/internal/localscan"
 	"github.com/biomassa/scopolamine/internal/mpris"
+	"github.com/biomassa/scopolamine/internal/player"
 	"github.com/biomassa/scopolamine/internal/player/cdp"
+	"github.com/biomassa/scopolamine/internal/player/mpv"
+	"github.com/biomassa/scopolamine/internal/player/router"
 	"github.com/biomassa/scopolamine/internal/tui"
 )
 
@@ -276,38 +280,73 @@ func runTUI(ctx context.Context, offline bool, themeOverride string) error {
 		cw, ch := cover.CellSize()
 		deps.Covers = cover.New(filepath.Join(config.CacheDir(), "art"), cw, ch)
 	}
-	model := tui.New(ctx, deps)
-	prog := tea.NewProgram(model, tea.WithContext(ctx))
 
+	// One player for the TUI and MPRIS: the router forwards to the Apple
+	// Music engine or the mpv engine.
+	rt := router.New(cfg.Volume)
+	deps.Player = rt
+	logPlayer(rt)
+	if srv, err := mpris.NewServer(rt); err == nil { // MPRIS is optional
+		ch := rt.Subscribe()
+		go func() {
+			for s := range ch {
+				srv.Update(s)
+			}
+		}()
+		defer func() { _ = srv.Close() }()
+	}
+
+	var startupErrs []error
+	root := cfg.LocalLibrary()
+	if st, err := os.Stat(root); err == nil && st.IsDir() {
+		scanner := &localscan.Scanner{Root: root}
+		deps.ScanLocal = func(ctx context.Context, progress func(done, total int)) (int, error) {
+			res, err := scanner.Scan(ctx, store, progress)
+			return res.Changed + res.Removed, err
+		}
+		local, err := mpv.New(ctx, mpv.Options{Resolve: localResolver(ctx, store)})
+		if err != nil {
+			startupErrs = append(startupErrs, fmt.Errorf("local playback: %w", err))
+		} else {
+			rt.Attach(router.Local, local)
+		}
+	}
+
+	var prog *tea.Program
 	var (
 		mu      sync.Mutex
-		plyr    *cdp.Player
-		mpr     *mpris.Server
 		stopped bool
 	)
 	if !offline {
-		go func() {
-			p, srv, err := startPlayer(ctx, cfg, dt, func(s string) { prog.Send(tui.PlayerStatusMsg(s)) })
-			mu.Lock()
-			defer mu.Unlock()
-			if stopped { // user quit while we were starting
-				if p != nil {
-					_ = p.Close()
+		// Chrome and MusicKit start when the Apple Music view first shows.
+		deps.StartApple = func() {
+			go func() {
+				p, err := startPlayer(ctx, cfg, dt, func(s string) { prog.Send(tui.PlayerStatusMsg(s)) })
+				mu.Lock()
+				defer mu.Unlock()
+				if stopped { // the user quit while it started
+					if p != nil {
+						_ = p.Close()
+					}
+					return
 				}
-				if srv != nil {
-					_ = srv.Close()
+				if err != nil {
+					go prog.Send(tui.PlayerFailedMsg{Err: err})
+					return
 				}
-				return
-			}
-			if err != nil {
-				go prog.Send(tui.PlayerFailedMsg{Err: err})
-				return
-			}
-			plyr, mpr = p, srv
-			go prog.Send(tui.PlayerReadyMsg{Player: p})
-		}()
-	} else {
-		go prog.Send(tui.PlayerStatusMsg("offline"))
+				rt.Attach(router.Apple, p)
+				go prog.Send(tui.PlayerReadyMsg{})
+			}()
+		}
+	}
+
+	model := tui.New(ctx, deps)
+	prog = tea.NewProgram(model, tea.WithContext(ctx))
+	for _, err := range startupErrs {
+		go prog.Send(tui.PlayerFailedMsg{Err: err})
+	}
+	if offline {
+		go prog.Send(tui.PlayerStatusMsg("offline: Apple Music is off"))
 	}
 
 	_, runErr := prog.Run()
@@ -317,12 +356,7 @@ func runTUI(ctx context.Context, offline bool, themeOverride string) error {
 
 	mu.Lock()
 	stopped = true
-	if mpr != nil {
-		_ = mpr.Close()
-	}
-	if plyr != nil {
-		_ = plyr.Close()
-	}
+	_ = rt.Close()
 	mu.Unlock()
 
 	cfg.Volume = model.Volume()
@@ -338,19 +372,18 @@ func runTUI(ctx context.Context, offline bool, themeOverride string) error {
 	return runErr
 }
 
-// startPlayer prepares Chrome (downloading it on first run), loads MusicKit
-// and registers MPRIS. MPRIS failure is not fatal.
-func startPlayer(ctx context.Context, cfg *config.Config, dt devtoken.Token, status func(string)) (*cdp.Player, *mpris.Server, error) {
+// startPlayer prepares Chrome (downloading it on first run) and loads
+// MusicKit.
+func startPlayer(ctx context.Context, cfg *config.Config, dt devtoken.Token, status func(string)) (*cdp.Player, error) {
 	status("preparing browser…")
 	if err := cdp.EnsureBrowser(status); err != nil {
-		return nil, nil, fmt.Errorf("browser: %w", err)
+		return nil, fmt.Errorf("browser: %w", err)
 	}
 	status("starting Apple Music…")
 	p, err := cdp.New(cdp.Options{DevToken: dt.Value, UserToken: cfg.UserToken, Origin: dt.Origin, Version: version})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	logPlayer(p)
 	var saveMu sync.Mutex
 	p.OnUserToken = func(t string) {
 		saveMu.Lock()
@@ -364,24 +397,30 @@ func startPlayer(ctx context.Context, cfg *config.Config, dt devtoken.Token, sta
 	defer cancel()
 	if err := p.WaitReady(wctx); err != nil {
 		_ = p.Close()
-		return nil, nil, err
+		return nil, err
 	}
-	srv, err := mpris.NewServer(p)
-	if err != nil {
-		return p, nil, nil //nolint:nilerr // MPRIS is optional
-	}
-	ch := p.Subscribe()
-	go func() {
-		for s := range ch {
-			srv.Update(s)
+	return p, nil
+}
+
+// localResolver maps local track ids to what mpv plays.
+func localResolver(ctx context.Context, store *library.Store) func(id string) (mpv.Item, error) {
+	return func(id string) (mpv.Item, error) {
+		t, err := store.LocalTrack(ctx, id)
+		if err != nil {
+			return mpv.Item{}, err
 		}
-	}()
-	return p, srv, nil
+		it := mpv.Item{ID: t.ID, Path: t.Path, CuePath: t.CuePath, Start: t.Start, Duration: t.Duration,
+			Title: t.Title, Artist: t.Artist, Codec: t.Codec, SampleRate: t.SampleRate, Bits: t.Bits}
+		if a, err := store.Album(ctx, t.AlbumID); err == nil {
+			it.Album, it.ArtworkURL = a.Title, a.ArtworkURL
+		}
+		return it, nil
+	}
 }
 
 // logPlayer appends the player's log lines, errors and skips to
 // CacheDir/player.log (recreated each run), for diagnosing playback.
-func logPlayer(p *cdp.Player) {
+func logPlayer(p interface{ Subscribe() <-chan player.State }) {
 	path := filepath.Join(config.CacheDir(), "player.log")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) //nolint:gosec // our cache dir
 	if err != nil {

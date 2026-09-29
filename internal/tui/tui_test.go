@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -236,8 +237,9 @@ func TestSessionRestore(t *testing.T) {
 	key(m, "enter")
 	playing(m, "i.a2", "Music Is Math", 95*time.Second)
 	sess := m.Session()
-	if sess.Artist != "Boards of Canada" || sess.AlbumID != "l.a" || sess.TrackID != "i.a2" || sess.Focus != paneTracks ||
-		sess.PlayAlbumID != "l.a" || sess.PlayTrackID != "i.a2" || sess.PlayPosSec != 95 {
+	a := sess.Apple
+	if sess.LastMode != "apple" || a == nil || a.Artist != "Boards of Canada" || a.AlbumID != "l.a" || a.TrackID != "i.a2" || a.Focus != paneTracks ||
+		a.PlayAlbumID != "l.a" || a.PlayTrackID != "i.a2" || a.PlayPosSec != 95 {
 		t.Fatalf("session = %+v", sess)
 	}
 
@@ -277,7 +279,7 @@ func TestSessionRestore(t *testing.T) {
 	// "All albums" is remembered as such.
 	key(m2, "2")
 	key(m2, "g")
-	if s := m2.Session(); s.AlbumID != sessionAllAlbums {
+	if s := m2.Session(); s.Apple.AlbumID != sessionAllAlbums {
 		t.Fatalf("all albums not saved: %+v", s)
 	}
 }
@@ -407,5 +409,25 @@ func TestLegendWraps(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// A session file of version 0.2 (only Apple Music, flat fields) restores
+// as the Apple Music session.
+func TestLegacySession(t *testing.T) {
+	path := t.TempDir() + "/session.json"
+	legacy := `{"focus": 2, "artist": "Boards of Canada", "album_id": "l.a", "track_id": "i.a2",
+		"play_album_id": "l.a", "play_track_id": "i.a2", "play_pos_sec": 95}`
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m := New(context.Background(), Deps{Store: fixtureStore(t), Player: &fakePlayer{}, Resume: LoadSession(path)})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
+	drive(m, m.Init())
+	if m.libView != m.apple || m.selectedArtist() != "Boards of Canada" || m.selectedAlbumID() != "l.a" || m.focus != paneTracks {
+		t.Fatalf("legacy session not restored: artist=%q album=%q focus=%d", m.selectedArtist(), m.selectedAlbumID(), m.focus)
+	}
+	if !strings.Contains(screen(m), "space resumes") {
+		t.Fatal("legacy resume point lost")
 	}
 }
