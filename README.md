@@ -44,6 +44,8 @@ cd scopolamine
 go build -trimpath -ldflags="-s -w" -o scopolamine ./cmd/scopolamine
 ```
 
+`make` does the same build and copies the binary to `~/.local/bin`. `make BINDIR=/other/dir` selects a different directory. `make test` runs the tests.
+
 ## Sign-in
 
 ```sh
