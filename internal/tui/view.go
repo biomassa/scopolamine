@@ -15,10 +15,44 @@ import (
 )
 
 // barHeight is the now-playing area: separator, track line, progress line,
-// status/notice line.
-const barHeight = 4
+// and the legend lines (one, or two when the legend does not fit).
+func (m *Model) barHeight() int { return 3 + len(m.legendLines()) }
 
-func (m *Model) listHeight() int { return max(1, m.height-barHeight-1) }
+func (m *Model) listHeight() int { return max(1, m.height-m.barHeight()-1) }
+
+// legendItems are the keys of the legend for the current view.
+func (m *Model) legendItems() []string {
+	switch {
+	case m.filtering:
+		return []string{"type to filter", "enter play", "esc clear"}
+	case m.mode == modeSearch:
+		return []string{"enter play", "a add", "D remove", "s edit search", "esc library", "space pause", "←/→ seek", "+/- vol", "T theme", "? help"}
+	}
+	return []string{"enter play", "space pause", "n/p track", "←/→ seek", "+/- vol", "/ filter", "s search", "D remove", "o playing", "T theme", "? help"}
+}
+
+// legendLines lays the legend items out on one line, or on two when they do
+// not fit, as in godoist. Items that do not fit on the first line start the
+// second one.
+func (m *Model) legendLines() []string {
+	const sep = " · "
+	width := max(10, m.width-1)
+	lines := []string{""}
+	for _, it := range m.legendItems() {
+		cur := &lines[len(lines)-1]
+		switch {
+		case *cur == "":
+			*cur = it
+		case ansi.StringWidth(*cur+sep+it) <= width:
+			*cur += sep + it
+		case len(lines) < 2:
+			lines = append(lines, it)
+		default:
+			*cur += sep + it // the second line is cut by fit
+		}
+	}
+	return lines
+}
 
 // --- labels ---------------------------------------------------------------
 
@@ -128,7 +162,7 @@ func (m *Model) View() tea.View {
 }
 
 func (m *Model) render() string {
-	if m.width < 20 || m.height < barHeight+3 {
+	if m.width < 20 || m.height < m.barHeight()+3 {
 		return "terminal too small"
 	}
 	if m.showHelp {
@@ -366,7 +400,8 @@ func (m *Model) renderBar() string {
 	b.WriteString(fit(left+bar+stDim.Render(right), w))
 	b.WriteByte('\n')
 
-	// Line 3: notices / status / key hint.
+	// Lines 3+: the legend, or a notice or status in the first legend line.
+	legend := m.legendLines()
 	var status string
 	switch {
 	case m.confirm != nil:
@@ -382,14 +417,20 @@ func (m *Model) renderBar() string {
 		}
 	case m.playerStatus != "":
 		status = stDim.Render(" " + m.playerStatus)
-	case m.filtering:
-		status = stDim.Render(" type to filter · enter play · esc clear")
-	case m.mode == modeSearch:
-		status = stDim.Render(" enter play · a add · D remove · s edit search · esc library · space pause · ←/→ seek · +/- vol · T theme · ? help")
-	default:
-		status = stDim.Render(" enter play · space pause · n/p track · ←/→ seek · +/- vol · / filter · s search · D remove · o playing · T theme · ? help")
 	}
-	b.WriteString(fit(status, w))
+	for i, l := range legend {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		switch {
+		case i == 0 && status != "":
+			b.WriteString(fit(status, w))
+		case status != "":
+			b.WriteString(strings.Repeat(" ", w)) // keep the bar height
+		default:
+			b.WriteString(fit(stDim.Render(" "+l), w))
+		}
+	}
 	return b.String()
 }
 

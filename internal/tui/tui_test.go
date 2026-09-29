@@ -382,3 +382,30 @@ func TestUnavailableTracks(t *testing.T) {
 		t.Fatalf("no storefront message:\n%s", screen(m))
 	}
 }
+
+func TestLegendWraps(t *testing.T) {
+	for _, width := range []int{200, 110, 80} {
+		m := New(context.Background(), Deps{Store: fixtureStore(t), Player: &fakePlayer{}})
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
+		drive(m, m.Init())
+		lines := m.legendLines()
+		wantLines := 1
+		if width < 150 {
+			wantLines = 2
+		}
+		if len(lines) != wantLines {
+			t.Fatalf("width %d: %d legend lines, want %d: %q", width, len(lines), wantLines, lines)
+		}
+		s := screen(m)
+		if got := strings.Count(s, "\n") + 1; got != 24 {
+			t.Fatalf("width %d: screen has %d lines, want 24", width, got)
+		}
+		if width >= 110 {
+			for _, it := range m.legendItems() {
+				if !strings.Contains(s, it) {
+					t.Fatalf("width %d: legend lost %q:\n%s", width, it, s)
+				}
+			}
+		}
+	}
+}

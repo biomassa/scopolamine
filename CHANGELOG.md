@@ -12,6 +12,10 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Color themes, as in godoist. `T` opens a theme picker: a move previews the theme on the whole screen, `enter` keeps it and saves it as `theme` in `~/.config/scopolamine/config.json`, and `esc` goes back. The themes are `scopolamine` (the scopolamine colors on the terminal background, the default) and 19 palettes from tideui. They set the terminal background while scopolamine runs. `--theme NAME` selects a theme for one run. The legends show `T theme`.
 - A Makefile. `make` builds scopolamine and copies the binary to `~/.local/bin`. `make BINDIR=/other/dir` selects a different directory, and `make test` runs the tests.
 
+### Changed
+
+- When the key legend does not fit on one line, the items that do not fit start a second line, as in godoist.
+
 ### Fixed
 
 - The legends of the library and the search show `+/- vol` again.
