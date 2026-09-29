@@ -365,7 +365,24 @@ ORDER BY CASE WHEN year = 0 THEN 1 ELSE 0 END, year, release_date, title COLLATE
 	if err != nil {
 		return nil, err
 	}
-	return scanAlbums(rows)
+	albums, err := scanAlbums(rows)
+	sort.SliceStable(albums, func(i, j int) bool { return albumLess(albums[i], albums[j]) })
+	return albums, err
+}
+
+// albumLess orders albums oldest first (undated last), then by release date
+// and title without regard to case.
+func albumLess(a, b Album) bool {
+	if (a.Year == 0) != (b.Year == 0) {
+		return b.Year == 0
+	}
+	if a.Year != b.Year {
+		return a.Year < b.Year
+	}
+	if a.ReleaseDate != b.ReleaseDate {
+		return a.ReleaseDate < b.ReleaseDate
+	}
+	return foldLess(a.Title, b.Title)
 }
 
 // AllAlbums lists every album of source, by artist then year.
@@ -375,7 +392,15 @@ ORDER BY artist_key, CASE WHEN year = 0 THEN 1 ELSE 0 END, year, title COLLATE N
 	if err != nil {
 		return nil, err
 	}
-	return scanAlbums(rows)
+	albums, err := scanAlbums(rows)
+	sort.SliceStable(albums, func(i, j int) bool {
+		ki, kj := ArtistKey(albums[i].Artist), ArtistKey(albums[j].Artist)
+		if ki != kj {
+			return ki < kj
+		}
+		return albumLess(albums[i], albums[j])
+	})
+	return albums, err
 }
 
 // Album fetches one album.
@@ -408,6 +433,22 @@ WHERE album_id = ? ORDER BY disc, number, path, start_ms, title COLLATE NOCASE`,
 		return nil, false, err
 	}
 	tracks, err = scanTracks(rows)
+	sort.SliceStable(tracks, func(i, j int) bool {
+		a, b := tracks[i], tracks[j]
+		if a.Disc != b.Disc {
+			return a.Disc < b.Disc
+		}
+		if a.Number != b.Number {
+			return a.Number < b.Number
+		}
+		if a.Path != b.Path {
+			return foldLess(a.Path, b.Path)
+		}
+		if a.Start != b.Start {
+			return a.Start < b.Start
+		}
+		return foldLess(a.Title, b.Title)
+	})
 	return tracks, at != 0, err
 }
 

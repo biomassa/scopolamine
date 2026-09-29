@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -157,6 +158,7 @@ GROUP BY top ORDER BY lower(top)`)
 		}
 		out = append(out, a)
 	}
+	sort.SliceStable(out, func(i, j int) bool { return foldLess(out[i].Name, out[j].Name) })
 	return out, rows.Err()
 }
 
@@ -192,6 +194,9 @@ GROUP BY t.folder ORDER BY lower(t.folder)`
 			Year: int(year.Int64), TrackCount: n, ArtworkURL: art,
 		})
 	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return foldLess(strings.TrimPrefix(out[i].ID, FolderPrefix), strings.TrimPrefix(out[j].ID, FolderPrefix))
+	})
 	return out, rows.Err()
 }
 
@@ -204,7 +209,14 @@ WHERE a.source = 'local' AND t.folder = ? ORDER BY t.path, t.start_ms`, folder)
 	if err != nil {
 		return nil, err
 	}
-	return scanTracks(rows)
+	ts, err := scanTracks(rows)
+	sort.SliceStable(ts, func(i, j int) bool {
+		if ts[i].Path != ts[j].Path {
+			return foldLess(ts[i].Path, ts[j].Path)
+		}
+		return ts[i].Start < ts[j].Start
+	})
+	return ts, err
 }
 
 // LocalTrack returns a local track by id.
@@ -222,6 +234,16 @@ FROM tracks t JOIN albums a ON a.id = t.album_id WHERE a.source = 'local' AND t.
 		return Track{}, sql.ErrNoRows
 	}
 	return ts[0], nil
+}
+
+// foldLess orders strings without regard to case (full Unicode case
+// folding); strings that differ only in case keep a fixed order.
+func foldLess(a, b string) bool {
+	fa, fb := strings.ToLower(a), strings.ToLower(b)
+	if fa != fb {
+		return fa < fb
+	}
+	return a < b
 }
 
 func prefixCols(prefix, cols string) string {

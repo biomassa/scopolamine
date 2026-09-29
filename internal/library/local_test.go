@@ -155,3 +155,64 @@ func TestMigrateKeepsAppleTracks(t *testing.T) {
 		t.Fatalf("apple cache lost: %+v %v %v", tr, synced, err)
 	}
 }
+
+func TestLocalSortIgnoresCase(t *testing.T) {
+	ctx := context.Background()
+	s, err := library.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	var files []library.LocalFile
+	for _, p := range []struct{ path, folder, album string }{
+		{"/m/CaptainJam/x/b.flac", "CaptainJam/x", "x"},
+		{"/m/awesome52/Alpine/A.flac", "awesome52/Alpine", "Alpine"},
+		{"/m/bare foot/solo/1.flac", "bare foot/solo", "solo"},
+		{"/m/BernardMarieKoltes/Tower/1.flac", "BernardMarieKoltes/Tower", "Tower"},
+		{"/m/Ärger/zz/1.flac", "Ärger/zz", "zz"},
+		{"/m/awesome52/beta/1.flac", "awesome52/beta", "beta"},
+		{"/m/awesome52/Alpine/b.flac", "awesome52/Alpine", "Alpine"},
+	} {
+		f := localFile(p.path, p.folder, "Various", p.album, 2000, "t "+p.path)
+		f.Tracks[0].Number = 0 // no track numbers: file order
+		files = append(files, f)
+	}
+	if err := s.UpdateLocal(ctx, files, nil); err != nil {
+		t.Fatal(err)
+	}
+	tops, _ := s.FolderArtists(ctx)
+	var names []string
+	for _, a := range tops {
+		names = append(names, a.Name)
+	}
+	if got := join(names); got != "awesome52,bare foot,BernardMarieKoltes,CaptainJam,Ärger" {
+		t.Fatalf("top folders: %s", got)
+	}
+	dirs, _ := s.FolderAlbums(ctx, "awesome52")
+	if len(dirs) != 2 || dirs[0].Title != "Alpine" || dirs[1].Title != "beta" {
+		t.Fatalf("album folders: %+v", dirs)
+	}
+	ft, _ := s.FolderTracks(ctx, "awesome52/Alpine")
+	if len(ft) != 2 || ft[0].Path != "/m/awesome52/Alpine/A.flac" || ft[1].Path != "/m/awesome52/Alpine/b.flac" {
+		t.Fatalf("file order: %s, %s", ft[0].Path, ft[1].Path)
+	}
+	albums, _ := s.AllAlbums(ctx, library.SourceLocal)
+	var titles []string
+	for _, a := range albums {
+		titles = append(titles, a.Title)
+	}
+	if got := join(titles); got != "Alpine,beta,solo,Tower,x,zz" {
+		t.Fatalf("album titles: %s", got)
+	}
+}
+
+func join(s []string) string {
+	out := ""
+	for i, x := range s {
+		if i > 0 {
+			out += ","
+		}
+		out += x
+	}
+	return out
+}
