@@ -14,6 +14,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 
+- The lists sort in dictionary order: case is ignored, and accented letters sort with their base letters (Ärger with the A names).
 - When the key legend does not fit on one line, the items that do not fit start a second line, as in godoist.
 
 ### Fixed
