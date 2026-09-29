@@ -1,0 +1,156 @@
+package localscan
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/biomassa/scopolamine/internal/library"
+)
+
+func write(t *testing.T, path string, data []byte) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestParseCue(t *testing.T) {
+	// Windows-1252 bytes: "Brötzmann" with ö = 0xF6.
+	sheet := parseCue(string([]byte("REM DATE 1968\r\nPERFORMER \"Br\xf6tzmann\"\r\nTITLE \"Machine Gun\"\r\n")) +
+		"FILE \"album.wav\" WAVE\n  TRACK 01 AUDIO\n    TITLE \"Machine Gun\"\n    INDEX 00 00:00:00\n    INDEX 01 00:00:32\n" +
+		"  TRACK 02 AUDIO\n    TITLE \"Responsible\"\n    PERFORMER \"Other\"\n    INDEX 01 17:05:37\n")
+	if sheet.date != "1968" || sheet.title != "Machine Gun" || len(sheet.files) != 1 || sheet.files[0].name != "album.wav" {
+		t.Fatalf("sheet: %+v", sheet)
+	}
+	tr := sheet.files[0].tracks
+	if len(tr) != 2 || tr[0].start != 32*time.Second/75 || tr[1].start != 17*time.Minute+5*time.Second+37*time.Second/75 || tr[1].performer != "Other" {
+		t.Fatalf("tracks: %+v", tr)
+	}
+
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "x.cue"), []byte("PERFORMER \"Br\xf6tzmann\"\nFILE \"a.wav\" WAVE\n TRACK 01 AUDIO\n INDEX 01 00:00:00\n TRACK 02 AUDIO\n INDEX 01 01:00:00\n"))
+	c, err := readCue(filepath.Join(dir, "x.cue"))
+	if err != nil || c.performer != "Brötzmann" {
+		t.Fatalf("Windows-1252 cue: %q %v", c.performer, err)
+	}
+	// The sheet names a.wav; a.flac matches by its base name.
+	write(t, filepath.Join(dir, "a.flac"), []byte("x"))
+	if got := c.singleFile(dir); got != filepath.Join(dir, "a.flac") {
+		t.Fatalf("singleFile = %q", got)
+	}
+	// Per-track sheets (one FILE per track) claim nothing.
+	multi := parseCue("FILE \"1.flac\" WAVE\n TRACK 01 AUDIO\n INDEX 01 00:00:00\nFILE \"2.flac\" WAVE\n TRACK 02 AUDIO\n INDEX 01 00:00:00\n")
+	if multi.singleFile(dir) != "" {
+		t.Fatal("per-track sheet claimed a file")
+	}
+}
+
+func TestParseProbe(t *testing.T) {
+	pr, err := parseProbe([]byte(`{"format":{"duration":"61.5","tags":{"ALBUM ARTIST":"Polwechsel","TITLE":"Field","TRACK":"2/3","DATE":"2009-05-01"}},
+		"streams":[{"codec_type":"audio","codec_name":"flac","sample_rate":"96000","bits_per_raw_sample":"24"},
+		{"codec_type":"video","codec_name":"mjpeg","disposition":{"attached_pic":1}}]}`))
+	if err != nil || pr.codec != "flac" || pr.sampleRate != 96000 || pr.bits != 24 || !pr.embeddedCover || pr.duration != 61500*time.Millisecond {
+		t.Fatalf("probe: %+v %v", pr, err)
+	}
+	if first(pr.tags, "album_artist", "album artist") != "Polwechsel" {
+		t.Fatal("tag keys not normalised")
+	}
+	mp3, _ := parseProbe([]byte(`{"format":{"duration":"1"},"streams":[{"codec_type":"audio","codec_name":"mp3","sample_rate":"44100","bits_per_sample":0}]}`))
+	if mp3.bits != 0 {
+		t.Fatal("lossy file got a bit depth")
+	}
+}
+
+// TestScanReal uses ffmpeg/ffprobe on generated files: tags, folder-name
+// fallbacks, folder covers, and a single-file album with a cue sheet.
+func TestScanReal(t *testing.T) {
+	for _, p := range []string{"ffmpeg", "ffprobe"} {
+		if _, err := exec.LookPath(p); err != nil {
+			t.Skip(p + " not installed")
+		}
+	}
+	root := t.TempDir()
+	gen := func(path string, secs string, meta ...string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		args := []string{"-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=" + secs, "-ac", "2", "-ar", "44100", "-sample_fmt", "s16"}
+		for _, m := range meta {
+			args = append(args, "-metadata", m)
+		}
+		if out, err := exec.Command("ffmpeg", append(args, path)...).CombinedOutput(); err != nil {
+			t.Fatalf("ffmpeg: %v %s", err, out)
+		}
+	}
+	gen(filepath.Join(root, "userA", "Tagged Album", "01.flac"), "2", "title=First", "artist=Some Artist", "album_artist=Some Artist", "album=Tagged", "track=1", "date=2020")
+	gen(filepath.Join(root, "userA", "Tagged Album", "02.flac"), "2", "title=Second", "artist=Some Artist", "album_artist=Some Artist", "album=Tagged", "track=2", "date=2020")
+	write(t, filepath.Join(root, "userA", "Tagged Album", "cover.jpg"), []byte("jpeg"))
+	gen(filepath.Join(root, "userB", "No Tags Here", "a track.flac"), "1")
+	gen(filepath.Join(root, "userC", "Cue Album", "image.flac"), "30")
+	write(t, filepath.Join(root, "userC", "Cue Album", "image.cue"), []byte(
+		"PERFORMER \"Cue Artist\"\nTITLE \"Cue Album\"\nREM DATE 1999\nFILE \"image.wav\" WAVE\n"+
+			"  TRACK 01 AUDIO\n    TITLE \"One\"\n    INDEX 01 00:00:00\n"+
+			"  TRACK 02 AUDIO\n    TITLE \"Two\"\n    INDEX 01 00:10:00\n"+
+			"  TRACK 03 AUDIO\n    TITLE \"Three\"\n    INDEX 01 00:20:00\n"))
+
+	store, err := library.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	ctx := context.Background()
+	sc := &Scanner{Root: root}
+	res, err := sc.Scan(ctx, store, nil)
+	if err != nil || res.Files != 4 || res.Changed != 4 {
+		t.Fatalf("scan: %+v %v", res, err)
+	}
+
+	byArtist := func(artist string) (library.Album, []library.Track) {
+		t.Helper()
+		albums, err := store.AlbumsByArtist(ctx, library.SourceLocal, artist)
+		if err != nil || len(albums) != 1 {
+			t.Fatalf("albums of %q: %+v %v", artist, albums, err)
+		}
+		tr, _, _ := store.Tracks(ctx, albums[0].ID)
+		return albums[0], tr
+	}
+	a, tr := byArtist("Some Artist")
+	if a.Title != "Tagged" || a.Year != 2020 || len(tr) != 2 || tr[0].Title != "First" || tr[1].Number != 2 ||
+		tr[0].Codec != "flac" || tr[0].SampleRate != 44100 || tr[0].Bits != 16 || tr[0].Folder != "userA/Tagged Album" ||
+		a.ArtworkURL != "file:"+filepath.Join(root, "userA", "Tagged Album", "cover.jpg") {
+		t.Fatalf("tagged album: %+v %+v", a, tr)
+	}
+	// No tags: artist = the parent folder, album = the album folder, title = the file name.
+	a, tr = byArtist("userB")
+	if a.Title != "No Tags Here" || len(tr) != 1 || tr[0].Title != "a track" {
+		t.Fatalf("untagged: %+v %+v", a, tr)
+	}
+	a, tr = byArtist("Cue Artist")
+	if a.Title != "Cue Album" || a.Year != 1999 || len(tr) != 3 || tr[1].Title != "Two" || tr[1].CueTrack != 2 ||
+		tr[1].Start != 10*time.Second || tr[2].Duration < 9*time.Second || tr[2].Duration > 11*time.Second ||
+		tr[0].Path != filepath.Join(root, "userC", "Cue Album", "image.flac") {
+		t.Fatalf("cue album: %+v %+v", a, tr)
+	}
+
+	// No change → nothing read; a removed file → removed.
+	if res, _ := sc.Scan(ctx, store, nil); res.Changed != 0 || res.Removed != 0 {
+		t.Fatalf("rescan: %+v", res)
+	}
+	if err := os.Remove(filepath.Join(root, "userB", "No Tags Here", "a track.flac")); err != nil {
+		t.Fatal(err)
+	}
+	if res, _ := sc.Scan(ctx, store, nil); res.Removed != 1 {
+		t.Fatalf("after removal: %+v", res)
+	}
+	if albums, _ := store.AlbumsByArtist(ctx, library.SourceLocal, "userB"); len(albums) != 0 {
+		t.Fatal("album of the removed file still there")
+	}
+}

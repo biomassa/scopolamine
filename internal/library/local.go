@@ -34,6 +34,12 @@ type LocalFile struct {
 	Tracks []Track
 }
 
+// localUpsertAlbumSQL is upsertAlbumSQL, except that an embedded cover
+// ("embedded:…") that an album has is not replaced by a folder image: the
+// embedded picture comes first.
+var localUpsertAlbumSQL = strings.Replace(upsertAlbumSQL, "artwork_url=excluded.artwork_url",
+	"artwork_url = CASE WHEN albums.artwork_url LIKE 'embedded:%' AND excluded.artwork_url NOT LIKE 'embedded:%' THEN albums.artwork_url ELSE excluded.artwork_url END", 1)
+
 // LocalAlbumID is the id of a local album: album artist, album title, and
 // album folder make one album.
 func LocalAlbumID(albumArtist, album, folder string) string {
@@ -94,7 +100,7 @@ func (s *Store) UpdateLocal(ctx context.Context, changed []LocalFile, removed []
 			return err
 		}
 	}
-	upAlbum, err := tx.PrepareContext(ctx, upsertAlbumSQL)
+	upAlbum, err := tx.PrepareContext(ctx, localUpsertAlbumSQL)
 	if err != nil {
 		return err
 	}
