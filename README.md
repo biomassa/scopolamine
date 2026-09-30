@@ -74,44 +74,44 @@ To sign in with a different account, use `scopolamine logout` and then `scopolam
 
 ## Commands
 
-| Command | Action |
-|---|---|
-| `scopolamine` | Start the TUI. |
-| `scopolamine --offline` | Browse the cache, without the player and without a sync. |
-| `scopolamine --theme NAME` | Use a color theme for this run only. |
-| `scopolamine login` | Sign in to Apple Music. |
-| `scopolamine logout` | Remove the saved user token. |
-| `scopolamine sync` | Sync the album list and show the progress. |
-| `scopolamine token` | Show the source and the expiry date of the developer token. |
-| `scopolamine token refresh` | Get the developer token again. |
-| `scopolamine version`, `scopolamine --version` | Show the version. |
-| `scopolamine help` | Show the command usage. |
+| Command                                        | Action                                                      |
+| ---------------------------------------------- | ----------------------------------------------------------- |
+| `scopolamine`                                  | Start the TUI.                                              |
+| `scopolamine --offline`                        | Browse the cache, without the player and without a sync.    |
+| `scopolamine --theme NAME`                     | Use a color theme for this run only.                        |
+| `scopolamine login`                            | Sign in to Apple Music.                                     |
+| `scopolamine logout`                           | Remove the saved user token.                                |
+| `scopolamine sync`                             | Sync the album list and show the progress.                  |
+| `scopolamine token`                            | Show the source and the expiry date of the developer token. |
+| `scopolamine token refresh`                    | Get the developer token again.                              |
+| `scopolamine version`, `scopolamine --version` | Show the version.                                           |
+| `scopolamine help`                             | Show the command usage.                                     |
 
 ## TUI
 
 ### Keys
 
-| Key | Action |
-|---|---|
-| `tab`, `shift+tab` | Go to the next or the previous column. `l`, `h`, and `1` `2` `3` also work. |
-| `j` `k`, `↓` `↑` | Move the cursor. |
-| `g` `G`, `pgup` `pgdn` | Go to the top, the bottom, or one half page. |
-| `/` | Filter the column. `esc` clears the filter. |
-| `enter` | On an artist: go to the albums. On an album: play it and go to the tracks. On a track: play from this track. On the resume track of a mode: continue at the saved position. |
-| `space` | Play or pause. After a restart: continue the last track. |
-| `←` `→` | Seek 10 seconds back or forward. With `shift`, seek 60 seconds. `,` and `.` also work. |
-| `]` `[` | Play the next or the previous track. `n` `p` and `>` `<` also work. |
-| `+` `-` | Change the volume. |
-| `x` | Stop. |
-| `o` | Go to the album that plays. |
-| `L` | Switch between the Apple Music mode and the local mode. |
-| `v` | Local mode: sort by metadata or by folders. |
-| `s` | Search Apple Music. Not in the local mode. |
-| `D` | Remove the album from your Apple Music library. scopolamine asks first. Not in the local mode. |
-| `R` | Sync the Apple Music album list, or scan the local folder. |
-| `T` | Select a color theme. |
-| `?` | Show the help and the version. |
-| `q` | Quit. |
+| Key                    | Action                                                                                                                                                                      |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tab`, `shift+tab`     | Go to the next or the previous column. `l`, `h`, and `1` `2` `3` also work.                                                                                                 |
+| `j` `k`, `↓` `↑`       | Move the cursor.                                                                                                                                                            |
+| `g` `G`, `pgup` `pgdn` | Go to the top, the bottom, or one half page.                                                                                                                                |
+| `/`                    | Filter the column. `esc` clears the filter.                                                                                                                                 |
+| `enter`                | On an artist: go to the albums. On an album: play it and go to the tracks. On a track: play from this track. On the resume track of a mode: continue at the saved position. |
+| `space`                | Play or pause. After a restart: continue the last track.                                                                                                                    |
+| `←` `→`                | Seek 10 seconds back or forward. With `shift`, seek 60 seconds. `,` and `.` also work.                                                                                      |
+| `]` `[`                | Play the next or the previous track. `n` `p` and `>` `<` also work.                                                                                                         |
+| `+` `-`                | Change the volume.                                                                                                                                                          |
+| `x`                    | Stop.                                                                                                                                                                       |
+| `o`                    | Go to the album that plays.                                                                                                                                                 |
+| `L`                    | Switch between the Apple Music mode and the local mode.                                                                                                                     |
+| `v`                    | Local mode: sort by metadata or by folders.                                                                                                                                 |
+| `s`                    | Search Apple Music. Not in the local mode.                                                                                                                                  |
+| `D`                    | Remove the album from your Apple Music library. scopolamine asks first. Not in the local mode.                                                                              |
+| `R`                    | Sync the Apple Music album list, or scan the local folder.                                                                                                                  |
+| `T`                    | Select a color theme.                                                                                                                                                       |
+| `?`                    | Show the help and the version.                                                                                                                                              |
+| `q`                    | Quit.                                                                                                                                                                       |
 
 ### "All" rows
 
@@ -198,15 +198,15 @@ scopolamine puts the full album into one MusicKit queue. MusicKit then goes to t
 
 ## Files
 
-| Path | Contents |
-|---|---|
-| `~/.config/scopolamine/config.json` | The user token, the volume, the theme, the local folder (`local_root`), and other settings. Mode 0600. |
-| `~/.cache/scopolamine/library.db` | The library cache (SQLite). |
-| `~/.cache/scopolamine/session.json` | The resume data of both modes. |
-| `~/.cache/scopolamine/webplayer-token.json` | The web player token. |
-| `~/.cache/scopolamine/player.log` | The player log of the last run. |
-| `~/.cache/scopolamine/art/` | The album covers. |
-| `~/.cache/scopolamine/chrome/` | The private copy of Google Chrome. |
+| Path                                        | Contents                                                                                               |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `~/.config/scopolamine/config.json`         | The user token, the volume, the theme, the local folder (`local_root`), and other settings. Mode 0600. |
+| `~/.cache/scopolamine/library.db`           | The library cache (SQLite).                                                                            |
+| `~/.cache/scopolamine/session.json`         | The resume data of both modes.                                                                         |
+| `~/.cache/scopolamine/webplayer-token.json` | The web player token.                                                                                  |
+| `~/.cache/scopolamine/player.log`           | The player log of the last run.                                                                        |
+| `~/.cache/scopolamine/art/`                 | The album covers.                                                                                      |
+| `~/.cache/scopolamine/chrome/`              | The private copy of Google Chrome.                                                                     |
 
 `SCOPOLAMINE_CHROME_PATH` or `CHROME_PATH` selects a different Chrome or Chromium. It must have the Widevine module.
 
@@ -247,4 +247,4 @@ scopolamine downloads Google Chrome and the Playwright driver at run time. They 
 
 scopolamine is not affiliated with Apple or endorsed by Apple. Apple Music and MusicKit are trademarks of Apple Inc.
 
-scopolamine comes "as is", without a warranty of any kind (see the [MIT license](LICENSE)). The author is not liable for any loss of data or other damage that scopolamine causes, directly or indirectly. This includes the albums in your Apple Music library. Use of the web player token can be against the terms of Apple Music. You are responsible for your use of the program.
+scopolamine comes "as is", without a warranty of any kind (see the [MIT license](LICENSE)). The author is not liable for any loss of data or other damage that scopolamine causes, directly or indirectly. This includes the albums in your Apple Music library. You are responsible for your use of the program.
