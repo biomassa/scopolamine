@@ -7,6 +7,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-09-30
+
 ### Changed
 
 - `enter` on a row that holds the current track (the track, its album, an album header, or All albums) continues it. If the track plays, nothing happens. To restart it, use `[`.
@@ -153,7 +155,8 @@ License:
 
 - MIT license. Parts of the code come from vibez by Simone Pelosi (MIT license). NOTICE and THIRD_PARTY_LICENSES.md give the details.
 
-[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/biomassa/scopolamine/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/biomassa/scopolamine/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/biomassa/scopolamine/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/biomassa/scopolamine/compare/v0.4.0...v0.5.0
