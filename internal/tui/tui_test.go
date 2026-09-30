@@ -499,3 +499,43 @@ func TestNegativePosition(t *testing.T) {
 		t.Fatalf("progress line:\n%s", s)
 	}
 }
+
+func TestQuitFade(t *testing.T) {
+	faded := make(chan struct{}, 1)
+	m := New(context.Background(), Deps{Store: fixtureStore(t), Player: &fakePlayer{},
+		FadeAway: func() { faded <- struct{}{} }})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
+	drive(m, m.Init())
+
+	// Nothing plays: q quits at once.
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	if _, ok := cmd().(tea.QuitMsg); !ok || m.quitting {
+		t.Fatal("q did not quit at once")
+	}
+
+	// Music plays: q fades first, keys are ignored, and ctrl+c quits.
+	playing(m, "i.a1", "Ready Lets Go", 20*time.Second)
+	_, cmd = m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	if !m.quitting {
+		t.Fatal("no quit fade")
+	}
+	if _, c := m.Update(tea.KeyPressMsg{Code: 'j', Text: "j"}); c != nil {
+		t.Fatal("a key acted during the quit fade")
+	}
+	if _, c := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"}); c != nil {
+		t.Fatal("a second q acted during the quit fade")
+	}
+	if _, c := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); c == nil {
+		t.Fatal("ctrl+c did not quit")
+	} else if _, ok := c().(tea.QuitMsg); !ok {
+		t.Fatal("ctrl+c did not quit")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("the quit fade did not quit")
+	}
+	select {
+	case <-faded:
+	default:
+		t.Fatal("FadeAway not called")
+	}
+}

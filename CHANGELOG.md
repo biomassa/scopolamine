@@ -7,6 +7,10 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Added
+
+- Fades. Before a stop, a pause, or a change of track, the music fades out in 0.2 seconds. After a pause, the music fades in in 0.2 seconds. `q` also fades the music out before scopolamine quits. During that fade, scopolamine ignores all keys except `ctrl+c`, which quits immediately. The track and position stay as the resume point. The new track starts at full volume. A second key push during a fade does its action immediately, without a new fade. Seeks and the change from one track to the next in an album do not fade. This applies to both modes and to the media keys.
+
 ## [0.4.0] - 2026-09-29
 
 ### Changed

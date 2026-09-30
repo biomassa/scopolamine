@@ -59,6 +59,9 @@ type Deps struct {
 	// the local view (nil: it never shuts down). It returns when the player
 	// has shut down.
 	StopApple func()
+	// FadeAway fades the music out before the quit and returns when the
+	// fade is over (nil: quit at once).
+	FadeAway func()
 }
 
 // Messages sent in from outside (see cmd/scopolamine).
@@ -197,6 +200,8 @@ type Model struct {
 	appleState   int  // appleOff, appleStarting, appleReady, or appleStopping
 	appleIdleSeq int  // the number of the idle timer that counts
 	appleIdleDue bool // the idle time is over; stop when no Apple Music plays
+
+	quitting bool // q: the music fades out, then the program quits
 }
 
 type pendingPlay struct {
@@ -887,6 +892,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	if k == "ctrl+c" {
 		return tea.Quit
 	}
+	if m.quitting {
+		return nil // only ctrl+c stops the fade
+	}
 	if m.themes != nil {
 		return m.handleThemeKey(k)
 	}
@@ -996,7 +1004,7 @@ func (m *Model) enter() tea.Cmd {
 func (m *Model) playbackKey(k string) (tea.Cmd, bool) {
 	switch k {
 	case "q":
-		return tea.Quit, true
+		return m.quit(), true
 	case "?":
 		m.showHelp = true
 		return nil, true
@@ -1194,4 +1202,17 @@ func (m *Model) jumpToPlaying() tea.Cmd {
 	// Albums arrive asynchronously; setAlbums will select wantAlbum.
 	m.wantAlbum = a.ID
 	return m.loadAlbums(artist)
+}
+
+// quit fades the music out if it plays, and then quits.
+func (m *Model) quit() tea.Cmd {
+	fade := m.deps.FadeAway
+	if fade == nil || !m.state.Playing {
+		return tea.Quit
+	}
+	m.quitting = true
+	return func() tea.Msg {
+		fade()
+		return tea.Quit()
+	}
 }

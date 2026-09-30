@@ -285,6 +285,7 @@ func runTUI(ctx context.Context, offline bool, themeOverride string) error {
 	// Music engine or the mpv engine.
 	rt := router.New(cfg.Volume)
 	deps.Player = rt
+	deps.FadeAway = rt.FadeAway
 	logPlayer(rt)
 	if srv, err := mpris.NewServer(rt); err == nil { // MPRIS is optional
 		ch := rt.Subscribe()

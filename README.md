@@ -11,6 +11,7 @@ scopolamine is a terminal program for [Apple Music](https://music.apple.com) and
 - Three columns: artists, albums, and tracks. Each column starts with an "All" row. "All albums" shows all the tracks of an artist, grouped by album.
 - Albums in date order, and track numbers on all tracks.
 - Full albums play as one queue, so that the tracks follow each other without a new start for each track.
+- A fade-out of 0.2 seconds before a stop, a pause, a change of track, and the quit (`q`). A fade-in of 0.2 seconds after a pause.
 - Album covers at the bottom of the track column, in kitty and Ghostty.
 - 20 color themes with a live preview (`T`), as in godoist.
 - A filter for each column (`/`).
