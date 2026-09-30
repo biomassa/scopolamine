@@ -7,6 +7,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-30
+
 ### Added
 
 - Fades. Before a stop, a pause, or a change of track, the music fades out in 0.2 seconds. After a pause, the music fades in in 0.2 seconds. The new track starts at full volume. A second key push during a fade does its action immediately, without a new fade. Seeks and the change from one track to the next in an album do not fade. This applies to both modes and to the media keys.
@@ -123,7 +125,8 @@ License:
 
 - MIT license. Parts of the code come from vibez by Simone Pelosi (MIT license). NOTICE and THIRD_PARTY_LICENSES.md give the details.
 
-[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/biomassa/scopolamine/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/biomassa/scopolamine/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/biomassa/scopolamine/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/biomassa/scopolamine/compare/v0.1.0...v0.2.0
