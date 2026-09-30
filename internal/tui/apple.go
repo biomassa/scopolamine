@@ -36,6 +36,7 @@ func (m *Model) appleOnShow(v *libView) tea.Cmd {
 	if v.source == library.SourceApple {
 		if m.appleState == appleOff && m.deps.StartApple != nil {
 			m.appleState = appleStarting
+			m.appleFailed = false
 			m.deps.StartApple()
 		}
 		return nil
@@ -81,4 +82,25 @@ func (m *Model) onAppleStopped() tea.Cmd {
 		return m.appleOnShow(m.libView)
 	}
 	return nil
+}
+
+// onAppleFailed reports a failed start of the Apple Music player. The next
+// switch to the Apple Music mode tries again.
+func (m *Model) onAppleFailed(err error) tea.Cmd {
+	m.appleState = appleOff
+	m.appleFailed = true
+	m.playerStatus = ""
+	return m.flash("player: "+err.Error(), true)
+}
+
+// playerLine is the player status for the status line: the start progress,
+// or after a failed start of the Apple Music player, how to try again.
+func (m *Model) playerLine() string {
+	switch {
+	case m.appleFailed && m.source == library.SourceApple:
+		return "playback unavailable · L L to try again"
+	case m.appleFailed:
+		return "Apple Music unavailable · L to try again"
+	}
+	return m.playerStatus
 }

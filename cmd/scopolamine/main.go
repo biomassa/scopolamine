@@ -334,7 +334,7 @@ func runTUI(ctx context.Context, offline bool, themeOverride string) error {
 					return
 				}
 				if err != nil {
-					go prog.Send(tui.PlayerFailedMsg{Err: err})
+					go prog.Send(tui.AppleFailedMsg{Err: err})
 					return
 				}
 				apple = p

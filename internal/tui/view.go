@@ -518,11 +518,11 @@ func (m *Model) renderBar() string {
 		status = " " + m.notice
 	case m.syncing:
 		status = " syncing library… " + m.syncProgress()
-		if m.playerStatus != "" {
-			status += stDim.Render("  ·  " + m.playerStatus)
+		if p := m.playerLine(); p != "" {
+			status += stDim.Render("  ·  " + p)
 		}
-	case m.playerStatus != "":
-		status = stDim.Render(" " + m.playerStatus)
+	case m.playerLine() != "":
+		status = stDim.Render(" " + m.playerLine())
 	}
 	for i, l := range legend {
 		if i > 0 {

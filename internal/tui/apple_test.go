@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,5 +80,53 @@ func TestAppleIdleStop(t *testing.T) {
 	drive(m, cmd)
 	if stops != 2 {
 		t.Fatal("idle Chrome not stopped")
+	}
+}
+
+func TestAppleRetry(t *testing.T) {
+	starts := 0
+	m := New(context.Background(), Deps{Store: localStore(t), Player: &fakePlayer{},
+		ScanLocal:  func(context.Context, func(int, int)) (int, error) { return 0, nil },
+		StartApple: func() { starts++ },
+		StopApple:  func() {}})
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 24})
+	drive(m, m.Init())
+	if starts != 1 {
+		t.Fatalf("starts = %d", starts)
+	}
+
+	// The first start fails: a hint for each mode.
+	m.Update(PlayerStatusMsg("starting Apple Music…"))
+	m.Update(AppleFailedMsg{Err: errors.New("no network")})
+	m.notice = "" // the error notice hides the status line
+	if s := screen(m); !strings.Contains(s, "playback unavailable · L L to try again") || strings.Contains(s, "starting Apple Music") {
+		t.Fatalf("apple hint:\n%s", s)
+	}
+	key(m, "L")
+	m.notice = ""
+	if s := screen(m); !strings.Contains(s, "Apple Music unavailable · L to try again") {
+		t.Fatalf("local hint:\n%s", s)
+	}
+
+	// The next switch to the Apple Music mode tries again.
+	key(m, "L")
+	if starts != 2 || m.appleState != appleStarting || m.appleFailed {
+		t.Fatalf("retry: starts = %d, state = %d, failed = %v", starts, m.appleState, m.appleFailed)
+	}
+	m.notice = ""
+	if strings.Contains(screen(m), "to try again") {
+		t.Fatal("hint still shown during the retry")
+	}
+
+	// The retry fails after a restart too, and the switch after it retries.
+	m.Update(AppleFailedMsg{Err: errors.New("timeout")})
+	key(m, "L")
+	key(m, "L")
+	if starts != 3 {
+		t.Fatalf("starts = %d", starts)
+	}
+	m.Update(PlayerReadyMsg{})
+	if m.appleState != appleReady || m.appleFailed {
+		t.Fatal("not ready after a good start")
 	}
 }

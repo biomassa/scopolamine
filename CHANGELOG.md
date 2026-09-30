@@ -7,6 +7,10 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Changed
+
+- When Chrome and MusicKit do not start, the next switch to the Apple Music mode tries again. The status line tells which key to push.
+
 ## [0.5.0] - 2026-09-30
 
 ### Added

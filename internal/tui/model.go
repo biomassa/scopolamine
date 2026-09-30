@@ -72,6 +72,9 @@ type (
 	PlayerReadyMsg struct{ Player player.Player }
 	// PlayerFailedMsg reports that playback could not start.
 	PlayerFailedMsg struct{ Err error }
+	// AppleFailedMsg reports that the Apple Music player could not start.
+	// The next switch to the Apple Music mode tries again.
+	AppleFailedMsg struct{ Err error }
 	// LocalChangedMsg reports changes in the local library folder.
 	LocalChangedMsg struct{}
 )
@@ -200,6 +203,7 @@ type Model struct {
 	appleState   int  // appleOff, appleStarting, appleReady, or appleStopping
 	appleIdleSeq int  // the number of the idle timer that counts
 	appleIdleDue bool // the idle time is over; stop when no Apple Music plays
+	appleFailed  bool // the last start failed; the next switch tries again
 
 	quitting bool // q: the music fades out, then the program quits
 }
@@ -499,6 +503,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case PlayerFailedMsg:
 		m.playerStatus = "playback unavailable"
 		return m, m.flash("player: "+msg.Err.Error(), true)
+
+	case AppleFailedMsg:
+		return m, m.onAppleFailed(msg.Err)
 
 	case stateMsg:
 		if !msg.ok {
