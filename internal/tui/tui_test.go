@@ -23,6 +23,7 @@ type fakePlayer struct {
 	toggle int
 	next   int
 	prev   int
+	stops  int
 	seeks  []time.Duration
 	bc     player.Broadcast
 }
@@ -36,7 +37,7 @@ func (f *fakePlayer) PlayTracks(ids []string, start int) error {
 func (f *fakePlayer) Play() error                    { return nil }
 func (f *fakePlayer) Pause() error                   { return nil }
 func (f *fakePlayer) Toggle() error                  { f.toggle++; return nil }
-func (f *fakePlayer) Stop() error                    { return nil }
+func (f *fakePlayer) Stop() error                    { f.stops++; return nil }
 func (f *fakePlayer) Next() error                    { f.next++; return nil }
 func (f *fakePlayer) Previous() error                { f.prev++; return nil }
 func (f *fakePlayer) Seek(d time.Duration) error     { f.seeks = append(f.seeks, d); return nil }
@@ -204,12 +205,11 @@ func TestBrowseAndPlay(t *testing.T) {
 		t.Fatalf("] / [ / n: next=%d prev=%d", fp.next, fp.prev)
 	}
 
-	key(m, "space")
+	playing(m, "i.a2", "Music Is Math", 30*time.Second)
+	key(m, "space") // the mode that plays: pause
 	if fp.toggle != 1 {
 		t.Fatal("space did not toggle")
 	}
-
-	playing(m, "i.a2", "Music Is Math", 30*time.Second)
 	s = screen(m)
 	if !strings.Contains(s, "▶ 2. Music Is Math") || !strings.Contains(s, "0:30") || !strings.Contains(s, "2/2") {
 		t.Fatalf("now playing not shown:\n%s", s)

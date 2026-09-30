@@ -1016,10 +1016,7 @@ func (m *Model) playbackKey(k string) (tea.Cmd, bool) {
 		m.showHelp = true
 		return nil, true
 	case "space":
-		if m.state.Track == nil && m.resume != nil {
-			return m.resumePlayback(), true
-		}
-		return m.withPlayer(func(p player.Player) error { return p.Toggle() }), true
+		return m.space(), true
 	case "]", "n", ">":
 		return m.withPlayer(func(p player.Player) error { return p.Next() }), true
 	case "[", "p", "<":

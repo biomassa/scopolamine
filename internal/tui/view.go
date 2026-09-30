@@ -549,7 +549,7 @@ func (m *Model) renderHelp() string {
 		{"g G  pgup pgdn", "top / bottom / page"},
 		{"/", "filter the focused column (esc clears)"},
 		{"enter", "play album (from the selected track in Tracks)"},
-		{"space", "play / pause (after a restart: resume where you left off)"},
+		{"space", "play / pause (after a restart: resume where you left off; in the other mode: stop, then continue this mode's track)"},
 		{"] [  (n p)", "next / previous track"},
 		{"→ ←  (. ,)", "seek ±10 s"},
 		{"shift+→ shift+←", "seek ±60 s"},
