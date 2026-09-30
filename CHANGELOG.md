@@ -7,6 +7,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-30
+
 ### Changed
 
 - When Chrome and MusicKit do not start, the next switch to the Apple Music mode tries again. The status line tells which key to push.
@@ -136,7 +138,8 @@ License:
 
 - MIT license. Parts of the code come from vibez by Simone Pelosi (MIT license). NOTICE and THIRD_PARTY_LICENSES.md give the details.
 
-[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/biomassa/scopolamine/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/biomassa/scopolamine/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/biomassa/scopolamine/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/biomassa/scopolamine/compare/v0.2.0...v0.3.0

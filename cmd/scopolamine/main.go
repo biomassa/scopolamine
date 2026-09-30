@@ -31,7 +31,7 @@ import (
 	"github.com/biomassa/scopolamine/internal/tui"
 )
 
-const version = "0.5.0"
+const version = "0.5.1"
 
 const usage = `scopolamine — Apple Music library browser for the terminal
 
