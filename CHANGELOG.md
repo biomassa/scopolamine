@@ -7,6 +7,10 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Changed
+
+- `enter` on a row that holds the current track (the track, its album, an album header, or All albums) continues it. If the track plays, nothing happens. To restart it, use `[`.
+
 ## [0.5.2] - 2026-09-30
 
 ### Changed

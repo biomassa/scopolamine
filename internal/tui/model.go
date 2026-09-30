@@ -830,15 +830,17 @@ func (m *Model) playSelection() tea.Cmd {
 			}
 		}
 	}
-	if m.focus == paneAlbums {
-		// enter on the album row of a paused album continues it, and on the
-		// album of the resume point continues at the saved position.
-		if st := m.state; st.Track != nil && !st.Playing && !st.Loading &&
-			st.Local == (m.source == library.SourceLocal) && m.playingAlbum.ID == key {
+	// A row that holds the current track of this mode continues it: nothing
+	// if it plays, play if it is paused, the saved position of a resume
+	// point.
+	if id, albumID, kind := m.currentTrack(); id != "" && m.rowHolds(key, id, albumID) {
+		switch kind {
+		case curPlaying:
+			return nil
+		case curPaused:
 			return m.withPlayer(player.Player.Play)
-		}
-		if r := m.resume; r != nil && r.albumID == key {
-			startID = r.trackID
+		case curResume:
+			startID = id
 		}
 	}
 	if m.tracksFor == key && m.tracksErr == nil {
@@ -1018,10 +1020,21 @@ func (m *Model) enter() tea.Cmd {
 		m.focus = paneAlbums
 		return nil
 	case paneAlbums:
+		// The cursor goes to the current track if the album holds it, else
+		// to the first track.
+		target := ""
+		if id, albumID, _ := m.currentTrack(); id != "" && m.rowHolds(m.tracksKey(), id, albumID) {
+			target = id
+		}
 		cmd := m.playSelection()
 		m.focus = paneTracks
 		if m.tracksFor == m.tracksKey() && len(m.tracks) > 0 {
-			m.selectTrackRow(m.tracks[0].ID)
+			if target == "" {
+				target = m.tracks[0].ID
+			}
+			m.selectTrackRow(target)
+		} else if target != "" {
+			m.wantTrack = target
 		} // otherwise onTracks puts the cursor on the start track
 		return cmd
 	}

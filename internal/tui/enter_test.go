@@ -71,10 +71,55 @@ func TestEnterOnPausedAlbum(t *testing.T) {
 	if fp.plays != 1 || fp.ids != nil {
 		t.Fatalf("paused album: plays = %d, PlayTracks(%v)", fp.plays, fp.ids)
 	}
+	if got := m.selectedTrackID(); m.focus != paneTracks || got != "i.a2" {
+		t.Fatalf("cursor on %q (focus %d), want the continued track i.a2", got, m.focus)
+	}
 	playing(m, "i.a2", "Music Is Math", 95*time.Second)
-	key(m, "enter")
-	if fp.plays != 1 || len(fp.ids) != 2 || fp.ids[fp.start] != "i.a1" {
-		t.Fatalf("playing album: plays = %d, PlayTracks(%v, %d)", fp.plays, fp.ids, fp.start)
+	m.selectTrackRow("i.a2")
+	key(m, "enter") // the track that plays: nothing
+	if fp.plays != 1 || fp.ids != nil {
+		t.Fatalf("playing track: plays = %d, PlayTracks(%v)", fp.plays, fp.ids)
+	}
+	key(m, "2")
+	key(m, "enter") // its album row: nothing
+	if fp.ids != nil {
+		t.Fatalf("playing album row: PlayTracks(%v)", fp.ids)
+	}
+	key(m, "3")
+	m.selectTrackRow("i.a1")
+	key(m, "enter") // another track: from 0:00
+	if len(fp.ids) != 2 || fp.ids[fp.start] != "i.a1" {
+		t.Fatalf("other track: PlayTracks(%v, %d)", fp.ids, fp.start)
+	}
+}
+
+// "All albums", and an album header in it, hold the resume point: enter
+// continues it, with all the artist's tracks in the queue.
+func TestEnterAllAlbumsContinues(t *testing.T) {
+	for _, onHeader := range []bool{false, true} {
+		fp := &fakePlayer{}
+		sess := &Session{Apple: &ViewSession{Focus: paneTracks, Artist: "Boards of Canada", AlbumID: "l.a", TrackID: "i.a2",
+			PlayAlbumID: "l.a", PlayTrackID: "i.a2", PlayPosSec: 1200}}
+		m := New(context.Background(), Deps{Store: fixtureStore(t), Player: fp, Resume: sess})
+		m.Update(tea.WindowSizeMsg{Width: 140, Height: 24})
+		drive(m, m.Init())
+		key(m, "2")
+		key(m, "g") // "All albums"
+		if onHeader {
+			key(m, "3")
+			for m.panes[paneTracks].selected() >= 0 && m.trackRows[m.panes[paneTracks].selected()].kind != rowHeader ||
+				m.trackRows[m.panes[paneTracks].selected()].album.ID != "l.a" {
+				key(m, "j")
+			}
+		}
+		key(m, "enter")
+		if len(fp.ids) != 3 || fp.ids[fp.start] != "i.a2" {
+			t.Fatalf("header=%v: PlayTracks(%v, %d), want all 3 tracks from i.a2", onHeader, fp.ids, fp.start)
+		}
+		m.Update(stateMsg{s: player.State{Playing: true, QueueIndex: fp.start, QueueLength: 3, Track: &player.NowPlaying{ID: "i.a2"}}, ok: true})
+		if len(fp.seeks) != 1 || fp.seeks[0] != 20*time.Minute {
+			t.Fatalf("header=%v: seeks = %v", onHeader, fp.seeks)
+		}
 	}
 }
 
