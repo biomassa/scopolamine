@@ -7,6 +7,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-30
+
 ### Changed
 
 - `space` pauses and resumes what plays, in any mode. With nothing playing, it continues the resume point of the mode that shows.
@@ -147,7 +149,8 @@ License:
 
 - MIT license. Parts of the code come from vibez by Simone Pelosi (MIT license). NOTICE and THIRD_PARTY_LICENSES.md give the details.
 
-[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/biomassa/scopolamine/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/biomassa/scopolamine/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/biomassa/scopolamine/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/biomassa/scopolamine/compare/v0.3.0...v0.4.0
