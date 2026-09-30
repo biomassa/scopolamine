@@ -96,3 +96,85 @@ func TestSpaceAcrossModes(t *testing.T) {
 	}
 }
 
+// During the fade-out, the old track still sends states. They must not
+// delete the resume point of its mode: back in that mode, space continues
+// at the saved position.
+func TestResumePositionAfterFade(t *testing.T) {
+	for _, via := range []string{"space", "enter"} {
+		t.Run(via, func(t *testing.T) {
+			fp := &fakePlayer{}
+			m := New(context.Background(), Deps{Store: localStore(t), Player: fp,
+				ScanLocal: func(context.Context, func(int, int)) (int, error) { return 0, nil }})
+			m.Update(tea.WindowSizeMsg{Width: 140, Height: 24})
+			drive(m, m.Init())
+			key(m, "j")
+			key(m, "tab")
+			key(m, "j")
+			key(m, "j")
+			key(m, "enter") // Geogaddi
+			playing(m, "i.a1", "Ready Lets Go", 20*time.Minute)
+			key(m, "L")
+			if via == "space" {
+				key(m, "space") // stops Apple Music
+			} else {
+				key(m, "j")
+				key(m, "tab")
+				key(m, "j")
+				key(m, "enter") // plays Embrace
+			}
+			playing(m, "i.a1", "Ready Lets Go", 20*time.Minute+time.Second) // the fade-out
+			if r := m.apple.resume; r == nil || r.trackID != "i.a1" || r.pos != 20*time.Minute {
+				t.Fatalf("apple resume point after the fade = %+v", r)
+			}
+			if via == "enter" {
+				localPlaying(m, false)
+			}
+			stopped(m)
+			key(m, "L")
+			if via == "enter" {
+				localPlaying(m, false)
+				key(m, "space") // first push: stops the local music
+				stopped(m)
+			}
+			fp.seeks = nil
+			key(m, "space") // continues Apple Music
+			if len(fp.ids) != 2 || fp.ids[fp.start] != "i.a1" {
+				t.Fatalf("continue: ids = %v start = %d", fp.ids, fp.start)
+			}
+			m.Update(stateMsg{s: player.State{Loading: true, QueueIndex: 0, QueueLength: 2, Track: &player.NowPlaying{ID: "i.a1"}}, ok: true})
+			m.Update(stateMsg{s: player.State{Playing: true, QueueIndex: 0, QueueLength: 2, Track: &player.NowPlaying{ID: "i.a1"}}, ok: true})
+			if len(fp.seeks) != 1 || fp.seeks[0] != 20*time.Minute {
+				t.Fatalf("seeks = %v, want [20m0s]", fp.seeks)
+			}
+		})
+	}
+}
+
+// The cursor moves to another album before the switch: the resume point
+// still shows in the bar, with the track of the player.
+func TestResumeShownAfterCursorMoved(t *testing.T) {
+	fp := &fakePlayer{}
+	m := New(context.Background(), Deps{Store: localStore(t), Player: fp,
+		ScanLocal: func(context.Context, func(int, int)) (int, error) { return 0, nil }})
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 24})
+	drive(m, m.Init())
+	key(m, "j")
+	key(m, "tab")
+	key(m, "j")
+	key(m, "j")
+	key(m, "enter") // Geogaddi
+	playing(m, "i.a1", "Ready Lets Go", 20*time.Minute)
+	key(m, "2")
+	key(m, "j") // the album cursor: Music Has the Right to Children
+	key(m, "L")
+	key(m, "space")
+	stopped(m)
+	key(m, "L")
+	r := m.apple.resume
+	if r == nil || r.track == nil || r.pos != 20*time.Minute {
+		t.Fatalf("resume point = %+v", r)
+	}
+	if s := screen(m); !strings.Contains(s, "Ready Lets Go") || !strings.Contains(s, "space resumes") {
+		t.Fatalf("bar does not show the resume point:\n%s", s)
+	}
+}

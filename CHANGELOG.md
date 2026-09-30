@@ -11,6 +11,12 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 - When Chrome and MusicKit do not start, the next switch to the Apple Music mode tries again. The status line tells which key to push.
 - `space` acts on the mode that shows: in the other mode, the first push stops the music, and the second push continues this mode's track.
+- `enter` on the album row of the resume point, or of a paused album, continues it at the saved position.
+
+### Fixed
+
+- After a switch of mode, the resume point of the first mode lost its position, so the track started again at 0:00.
+- When the cursor was on a different album at a switch of mode, the status bar showed "stopped" instead of the resume point.
 
 ## [0.5.0] - 2026-09-30
 

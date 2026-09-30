@@ -224,11 +224,17 @@ func (m *Model) playingResume() *resumePoint {
 // stops.
 func (m *Model) keepResume(pv *libView) {
 	pv.resume = m.playingResume()
-	if pv.resume != nil {
-		if t, ok := m.findTrack(pv, pv.resume.trackID); ok {
-			pv.resume.track = &t
-		}
+	if pv.resume == nil {
+		return
 	}
+	if t, ok := m.findTrack(pv, pv.resume.trackID); ok {
+		pv.resume.track = &t
+		return
+	}
+	// The view shows other tracks now: the player knows the track too. The
+	// bar needs the track to show the resume point.
+	n := m.state.Track
+	pv.resume.track = &library.Track{ID: n.ID, AlbumID: pv.resume.albumID, Title: n.Title, Artist: n.Artist, Duration: n.Duration}
 }
 
 // Session captures the state of both modes for the next start.

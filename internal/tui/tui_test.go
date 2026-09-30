@@ -24,6 +24,7 @@ type fakePlayer struct {
 	next   int
 	prev   int
 	stops  int
+	plays  int
 	seeks  []time.Duration
 	bc     player.Broadcast
 }
@@ -34,7 +35,7 @@ func (f *fakePlayer) PlayTracks(ids []string, start int) error {
 	f.ids, f.start = ids, start
 	return nil
 }
-func (f *fakePlayer) Play() error                    { return nil }
+func (f *fakePlayer) Play() error                    { f.plays++; return nil }
 func (f *fakePlayer) Pause() error                   { return nil }
 func (f *fakePlayer) Toggle() error                  { f.toggle++; return nil }
 func (f *fakePlayer) Stop() error                    { f.stops++; return nil }

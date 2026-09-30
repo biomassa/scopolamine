@@ -589,11 +589,14 @@ func (m *Model) applyState(s player.State) tea.Cmd {
 		m.volume = s.Volume
 	}
 	if s.Track != nil {
+		// Only a track of the queue that scopolamine started counts. During
+		// a fade-out, the old track still plays: its mode keeps its resume
+		// point.
 		if a, ok := m.queueAlbums[s.Track.ID]; ok {
 			m.playingAlbum = a
-		}
-		if pv := m.playingView(); pv != nil {
-			pv.resume = nil // this mode plays; its old resume point is moot
+			if pv := m.playingView(); pv != nil {
+				pv.resume = nil // this mode plays; its old resume point is moot
+			}
 		}
 	}
 	m.maybeSeek(s)
@@ -818,6 +821,17 @@ func (m *Model) playSelection() tea.Cmd {
 					}
 				}
 			}
+		}
+	}
+	if m.focus == paneAlbums {
+		// enter on the album row of a paused album continues it, and on the
+		// album of the resume point continues at the saved position.
+		if st := m.state; st.Track != nil && !st.Playing && !st.Loading &&
+			st.Local == (m.source == library.SourceLocal) && m.playingAlbum.ID == key {
+			return m.withPlayer(player.Player.Play)
+		}
+		if r := m.resume; r != nil && r.albumID == key {
+			startID = r.trackID
 		}
 	}
 	if m.tracksFor == key && m.tracksErr == nil {

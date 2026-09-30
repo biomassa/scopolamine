@@ -25,7 +25,7 @@ func (m *Model) space() tea.Cmd {
 		if pv := m.playingView(); pv != nil {
 			m.keepResume(pv)
 		}
-		m.playingAlbum = library.Album{}
+		m.playingAlbum, m.queueAlbums = library.Album{}, nil
 		return m.withPlayer(func(p player.Player) error { return p.Stop() })
 	}
 	// Paused: playTracks keeps the other mode's track as its resume point.
