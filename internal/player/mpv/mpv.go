@@ -70,11 +70,17 @@ type Player struct {
 	queue   []Item
 	entries []entry // the mpv playlist: one entry per file or cue sheet
 	pos     int     // mpv playlist-pos
-	timePos time.Duration
-	paused  bool
-	idle    bool
-	volume  float64
-	loading bool
+	// pathEntry is the entry of the file that plays, from mpv's path, or -1.
+	// While the earlier entries are inserted, playlist-pos does not match
+	// entries yet; the path always does. newFile is true from start-file of
+	// a new queue on, so that the path of the old file does not count.
+	pathEntry int
+	newFile   bool
+	timePos   time.Duration
+	paused    bool
+	idle      bool
+	volume    float64
+	loading   bool
 	// fileReady is false from a playlist change until mpv reports the new
 	// file loaded. Navigation in that time waits in pending: mpv handles
 	// playlist and seek commands badly before the file plays.
@@ -122,7 +128,7 @@ func New(ctx context.Context, o Options) (*Player, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("mpv: %w", err)
 	}
-	p := &Player{resolve: o.Resolve, cmd: cmd, sock: sock, volume: 1, pos: -1, idle: true, done: make(chan struct{})}
+	p := &Player{resolve: o.Resolve, cmd: cmd, sock: sock, volume: 1, pos: -1, pathEntry: -1, idle: true, done: make(chan struct{})}
 	p.state = player.State{Ready: true, QueueIndex: -1, Volume: 1, Local: true}
 	go func() { _ = cmd.Wait(); p.shutdown() }()
 
@@ -140,7 +146,7 @@ func New(ctx context.Context, o Options) (*Player, error) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	go p.read()
-	for i, prop := range []string{"playlist-pos", "time-pos", "pause", "idle-active", "volume", "seeking"} {
+	for i, prop := range []string{"playlist-pos", "time-pos", "pause", "idle-active", "volume", "seeking", "path"} {
 		p.send("observe_property", i+1, prop)
 	}
 	return p, nil
@@ -186,7 +192,7 @@ func (p *Player) read() {
 		case "start-file":
 			// A new file: the old time position belongs to the old file.
 			p.mu.Lock()
-			p.timePos, p.fileReady = 0, false
+			p.timePos, p.fileReady, p.newFile = 0, false, true
 			p.mu.Unlock()
 		case "file-loaded":
 			p.mu.Lock()
@@ -234,6 +240,18 @@ func (p *Player) onProperty(name string, data json.RawMessage) {
 		if json.Unmarshal(data, &v) == nil {
 			p.volume = v / 100
 		}
+	case "path":
+		var v string
+		_ = json.Unmarshal(data, &v)
+		p.pathEntry = -1
+		if p.newFile {
+			for i, e := range p.entries {
+				if e.path == v {
+					p.pathEntry = i
+					break
+				}
+			}
+		}
 	}
 	s := p.snapshot()
 	p.mu.Unlock()
@@ -243,10 +261,14 @@ func (p *Player) onProperty(name string, data json.RawMessage) {
 // current returns the queue index of the item that plays, from the playlist
 // position and, inside a cue sheet, the time position. mu must be held.
 func (p *Player) current() int {
-	if p.idle || p.pos < 0 || p.pos >= len(p.entries) {
+	if p.idle {
 		return -1
 	}
-	e := p.entries[p.pos]
+	ei := p.pathEntry // playlist-pos is wrong while earlier entries go in
+	if ei < 0 || ei >= len(p.entries) {
+		return -1
+	}
+	e := p.entries[ei]
 	cur := e.items[0]
 	for _, i := range e.items {
 		if p.queue[i].CuePath != "" && p.timePos+50*time.Millisecond >= p.queue[i].Start {
@@ -334,6 +356,7 @@ func (p *Player) PlayTracks(ids []string, start int) error {
 	}
 	p.mu.Lock()
 	p.queue, p.entries, p.pos, p.timePos, p.idle = queue, entries, -1, 0, false
+	p.pathEntry, p.newFile = -1, false
 	p.fileReady, p.pending = false, nil
 	p.mu.Unlock()
 
@@ -386,6 +409,7 @@ func (p *Player) Stop() error {
 	p.send("stop")
 	p.mu.Lock()
 	p.queue, p.entries, p.pos = nil, nil, -1
+	p.pathEntry, p.newFile = -1, false
 	p.mu.Unlock()
 	return nil
 }

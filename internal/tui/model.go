@@ -121,6 +121,8 @@ type libView struct {
 	source  string // library.SourceApple or library.SourceLocal
 	folders bool   // local only: folder sorting instead of metadata
 	loaded  bool   // the first load has started
+	// jumpOnInfo: jump to the resume point when its lookup is done.
+	jumpOnInfo bool
 
 	focus int
 	panes [numPanes]*pane
@@ -233,7 +235,7 @@ func New(ctx context.Context, d Deps) *Model {
 func (m *Model) Volume() float64 { return m.volume }
 
 func (m *Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{m.showView(m.libView)}
+	cmds := []tea.Cmd{m.showView(m.libView), m.jumpToCurrent()}
 	// Both libraries refresh in the background at the start, whichever
 	// mode shows.
 	if m.deps.AutoSync && m.deps.Src != nil {
@@ -516,7 +518,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.applyState(msg.s), m.maybeStopApple(), m.stateCh)
 
 	case resumeInfoMsg:
-		return m, m.inView(m.view(msg.src), func() tea.Cmd { m.onResumeInfo(msg); return nil })
+		v := m.view(msg.src)
+		m.inView(v, func() tea.Cmd { m.onResumeInfo(msg); return nil })
+		if v == m.libView && v.jumpOnInfo {
+			return m, m.jumpToCurrent()
+		}
+		return m, nil
 
 	case removedMsg:
 		return m, m.onRemoved(msg)
@@ -1067,10 +1074,29 @@ func (m *Model) switchMode() tea.Cmd {
 			return m.flash("no local library (set local_root in the config)", true)
 		}
 		m.filtering = false
-		return m.showView(m.local)
+		return tea.Batch(m.showView(m.local), m.jumpToCurrent())
 	}
 	m.filtering = false
-	return m.showView(m.apple)
+	return tea.Batch(m.showView(m.apple), m.jumpToCurrent())
+}
+
+// jumpToCurrent puts the cursor on the current track of the mode that
+// shows: the track that plays or is paused in this mode, else the resume
+// point of the mode.
+func (m *Model) jumpToCurrent() tea.Cmd {
+	m.jumpOnInfo = false
+	if a := m.playingAlbum; m.state.Track != nil && a.ID != "" && a.Source != SourceCatalog && m.view(a.Source) == m.libView {
+		return m.jumpToAlbum(a, m.state.Track.ID)
+	}
+	r := m.resume
+	if r == nil {
+		return nil
+	}
+	if r.album.ID == "" {
+		m.jumpOnInfo = true // the lookup of the resume point is not done yet
+		return nil
+	}
+	return m.jumpToAlbum(r.album, r.trackID)
 }
 
 // sortName is the local sorting: "metadata" or "folders".
@@ -1180,9 +1206,17 @@ func (m *Model) jumpToPlaying() tea.Cmd {
 		}
 		return m.flash("playing “"+a.Title+"” from search results", false)
 	}
+	trackID := ""
 	if m.state.Track != nil {
-		m.wantTrack = m.state.Track.ID
+		trackID = m.state.Track.ID
 	}
+	return m.jumpToAlbum(a, trackID)
+}
+
+// jumpToAlbum selects album a of the view that shows, with the cursor on
+// track trackID in the track column.
+func (m *Model) jumpToAlbum(a library.Album, trackID string) tea.Cmd {
+	m.wantTrack = trackID
 	ap := m.panes[paneArtists]
 	ap.setFilter("")
 	found := false

@@ -23,7 +23,7 @@ func TestEnterContinuesResumePoint(t *testing.T) {
 	}{
 		{"album row", paneAlbums, "", "i.a2", true},
 		{"resume track", paneTracks, "i.a2", "i.a2", true},
-		{"other track", paneTracks, "i.a1", "i.a1", false},
+		{"other track", paneTracks, "i.a2", "i.a1", false}, // the test moves the cursor up
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			fp := &fakePlayer{}
@@ -32,6 +32,12 @@ func TestEnterContinuesResumePoint(t *testing.T) {
 			m := New(context.Background(), Deps{Store: fixtureStore(t), Player: fp, Resume: sess})
 			m.Update(tea.WindowSizeMsg{Width: 140, Height: 24})
 			drive(m, m.Init())
+			if sel := m.selectedTrackID(); sel != "i.a2" && c.focus == paneTracks {
+				t.Fatalf("start: cursor on %q, want the resume track", sel)
+			}
+			if c.wantStart == "i.a1" {
+				key(m, "k")
+			}
 			key(m, "enter")
 			if len(fp.ids) <= fp.start || fp.ids[fp.start] != c.wantStart {
 				t.Fatalf("PlayTracks(%v, %d), want start %s", fp.ids, fp.start, c.wantStart)
@@ -69,5 +75,30 @@ func TestEnterOnPausedAlbum(t *testing.T) {
 	key(m, "enter")
 	if fp.plays != 1 || len(fp.ids) != 2 || fp.ids[fp.start] != "i.a1" {
 		t.Fatalf("playing album: plays = %d, PlayTracks(%v, %d)", fp.plays, fp.ids, fp.start)
+	}
+}
+
+// selectedTrackID is the track under the cursor of the track column, or "".
+func (m *Model) selectedTrackID() string {
+	if i := m.panes[paneTracks].selected(); i >= 0 && i < len(m.trackRows) && m.trackRows[i].kind == rowTrack {
+		return m.tracks[m.trackRows[i].track].ID
+	}
+	return ""
+}
+
+// A report from before the new queue (another track, not in the queue)
+// does not drop the resume seek.
+func TestResumeSeekIgnoresOldReports(t *testing.T) {
+	fp := &fakePlayer{}
+	sess := &Session{Apple: &ViewSession{Focus: paneTracks, Artist: "Boards of Canada", AlbumID: "l.a", TrackID: "i.a2",
+		PlayAlbumID: "l.a", PlayTrackID: "i.a2", PlayPosSec: 1200}}
+	m := New(context.Background(), Deps{Store: fixtureStore(t), Player: fp, Resume: sess})
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 24})
+	drive(m, m.Init())
+	key(m, "enter")
+	m.Update(stateMsg{s: player.State{Playing: true, Track: &player.NowPlaying{ID: "i.c1"}}, ok: true}) // an old report
+	m.Update(stateMsg{s: player.State{Playing: true, QueueIndex: 1, QueueLength: 2, Track: &player.NowPlaying{ID: "i.a2"}}, ok: true})
+	if len(fp.seeks) != 1 || fp.seeks[0] != 20*time.Minute {
+		t.Fatalf("seeks = %v", fp.seeks)
 	}
 }

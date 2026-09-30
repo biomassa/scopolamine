@@ -78,10 +78,21 @@ func TestMPV(t *testing.T) {
 	if err := p.PlayTracks([]string{"a", "b", "c1", "c2", "c3"}, 1); err != nil {
 		t.Fatal(err)
 	}
-	s := waitFor(t, ch, "track b", func(s player.State) bool { return s.Track != nil && s.Track.ID == "b" && s.Playing && !s.Loading })
+	// While the earlier entries go in, no state may report another track:
+	// the TUI then drops its resume seek.
+	s := waitFor(t, ch, "track b", func(s player.State) bool {
+		if s.Track != nil && s.Track.ID != "b" {
+			t.Fatalf("start at b: a state reports track %s: %+v", s.Track.ID, s)
+		}
+		return s.Track != nil && s.Track.ID == "b" && s.Playing && !s.Loading
+	})
 	if s.QueueIndex != 1 || s.QueueLength != 5 || s.Format != "FLAC 44.1/16" || !s.Local {
 		t.Fatalf("state: %+v", s)
 	}
+	_ = p.Seek(2 * time.Second) // a resume seek right after the start
+	waitFor(t, ch, "resume seek in b", func(s player.State) bool {
+		return s.Track != nil && s.Track.ID == "b" && s.Position >= 2*time.Second
+	})
 	_ = p.Next() // into the cue sheet
 	waitFor(t, ch, "cue track One", func(s player.State) bool { return s.Track != nil && s.Track.ID == "c1" && !s.Loading })
 	_ = p.Next() // next chapter of the same sheet

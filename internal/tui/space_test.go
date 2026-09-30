@@ -18,163 +18,122 @@ func localPlaying(m *Model, paused bool) {
 		Track: &player.NowPlaying{ID: "file:/m/koptt/Embrace/1.flac", Title: "Embrace I", Duration: time.Minute}}, ok: true})
 }
 
-func TestSpaceAcrossModes(t *testing.T) {
+func newModesModel(t *testing.T) (*Model, *fakePlayer) {
+	t.Helper()
 	fp := &fakePlayer{}
 	m := New(context.Background(), Deps{Store: localStore(t), Player: fp,
 		ScanLocal: func(context.Context, func(int, int)) (int, error) { return 0, nil }})
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 24})
 	drive(m, m.Init())
+	return m, fp
+}
 
-	// Apple Music plays Geogaddi; switch to the local mode.
+// playGeogaddi plays Geogaddi in the Apple Music mode, at 30 seconds of
+// track 1.
+func playGeogaddi(m *Model) {
 	key(m, "j")
 	key(m, "tab")
 	key(m, "j")
 	key(m, "j")
 	key(m, "enter")
-	playing(m, "i.a1", "Ready Lets Go", 20*time.Second)
-	key(m, "L")
+	playing(m, "i.a1", "Ready Lets Go", 30*time.Second)
+}
 
-	// First space: Apple Music stops and keeps its track as the resume point.
-	key(m, "space")
-	if fp.stops != 1 || fp.toggle != 0 {
-		t.Fatalf("stops = %d, toggles = %d", fp.stops, fp.toggle)
-	}
-	if r := m.apple.resume; r == nil || r.trackID != "i.a1" || r.pos != 20*time.Second {
-		t.Fatalf("apple resume point = %+v", r)
-	}
-	stopped(m)
-
-	// Second space: the local mode has no current track. space never plays
-	// the selection: it only gives a hint.
-	fp.ids = nil
-	key(m, "j") // Polwechsel
-	key(m, "space")
-	if fp.ids != nil || !strings.Contains(screen(m), "push enter to play") {
-		t.Fatalf("no current track: ids = %v\n%s", fp.ids, screen(m))
-	}
+// playEmbrace plays Embrace in the local mode.
+func playEmbrace(m *Model) {
+	key(m, "1")
+	key(m, "g")
+	key(m, "j")
 	key(m, "tab")
-	key(m, "j") // Embrace
+	key(m, "j")
 	key(m, "enter")
-	if strings.Join(fp.ids, ",") != "file:/m/koptt/Embrace/1.flac,file:/m/koptt/Embrace/2.flac" {
-		t.Fatalf("local enter: %v", fp.ids)
-	}
+}
 
-	// The selection moves; space still pauses the track that plays.
-	localPlaying(m, false)
-	key(m, "k")
+// space pauses and resumes what plays, in any mode. With nothing playing,
+// it continues the resume point of the mode that shows.
+func TestSpace(t *testing.T) {
+	m, fp := newModesModel(t)
 	key(m, "space")
-	if fp.toggle != 1 || len(fp.ids) != 2 {
-		t.Fatalf("toggles = %d, ids = %v", fp.toggle, fp.ids)
+	if fp.toggle != 0 || fp.ids != nil || !strings.Contains(screen(m), "push enter to play") {
+		t.Fatalf("nothing to play: toggles = %d ids = %v\n%s", fp.toggle, fp.ids, screen(m))
 	}
-	fp.toggle = 0
-
-	// Back in Apple Music while local plays: stop, then the Apple resume point.
-	localPlaying(m, false)
+	playGeogaddi(m)
 	key(m, "L")
-	key(m, "space")
-	if fp.stops != 2 || m.local.resume == nil || m.local.resume.trackID != "file:/m/koptt/Embrace/1.flac" {
-		t.Fatalf("stops = %d, local resume = %+v", fp.stops, m.local.resume)
+	key(m, "space") // the other mode plays: pause it
+	if fp.toggle != 1 || fp.stops != 0 {
+		t.Fatalf("toggles = %d, stops = %d", fp.toggle, fp.stops)
 	}
-	stopped(m)
+
+	// Local plays Embrace; Apple keeps track 1 at 0:30 as its resume point.
+	playEmbrace(m)
+	localPlaying(m, false)
+	stopped(m) // the local music ends
+	key(m, "L")
 	fp.ids = nil
-	key(m, "space")
+	key(m, "space") // nothing plays: the Apple resume point
 	if len(fp.ids) != 2 || fp.ids[fp.start] != "i.a1" {
-		t.Fatalf("apple resume: ids = %v start = %d", fp.ids, fp.start)
+		t.Fatalf("continue: PlayTracks(%v, %d)", fp.ids, fp.start)
 	}
-
-	// The other mode is paused: space plays this mode at once, no stop.
-	m.Update(stateMsg{s: player.State{Position: 25 * time.Second, QueueIndex: 1, QueueLength: 2,
-		Track: &player.NowPlaying{ID: "i.a1", Title: "Ready Lets Go", Duration: time.Minute}}, ok: true})
-	key(m, "L")
-	fp.ids = nil
-	key(m, "space")
-	if fp.stops != 2 || len(fp.ids) != 2 || fp.ids[fp.start] != "file:/m/koptt/Embrace/1.flac" {
-		t.Fatalf("paused other mode: stops = %d ids = %v", fp.stops, fp.ids)
-	}
-	if r := m.apple.resume; r == nil || r.trackID != "i.a1" || r.pos != 25*time.Second {
-		t.Fatalf("apple resume point after the paused switch = %+v", r)
+	fp.seeks = nil
+	m.Update(stateMsg{s: player.State{Playing: true, QueueIndex: 0, QueueLength: 2, Track: &player.NowPlaying{ID: "i.a1"}}, ok: true})
+	if len(fp.seeks) != 1 || fp.seeks[0] != 30*time.Second {
+		t.Fatalf("seeks = %v", fp.seeks)
 	}
 }
 
-// During the fade-out, the old track still sends states. They must not
-// delete the resume point of its mode: back in that mode, space continues
-// at the saved position.
-func TestResumePositionAfterFade(t *testing.T) {
-	for _, via := range []string{"space", "enter"} {
-		t.Run(via, func(t *testing.T) {
-			fp := &fakePlayer{}
-			m := New(context.Background(), Deps{Store: localStore(t), Player: fp,
-				ScanLocal: func(context.Context, func(int, int)) (int, error) { return 0, nil }})
-			m.Update(tea.WindowSizeMsg{Width: 140, Height: 24})
-			drive(m, m.Init())
-			key(m, "j")
-			key(m, "tab")
-			key(m, "j")
-			key(m, "j")
-			key(m, "enter") // Geogaddi
-			playing(m, "i.a1", "Ready Lets Go", 20*time.Minute)
-			key(m, "L")
-			if via == "space" {
-				key(m, "space") // stops Apple Music
-			} else {
-				key(m, "j")
-				key(m, "tab")
-				key(m, "j")
-				key(m, "enter") // plays Embrace
-			}
-			playing(m, "i.a1", "Ready Lets Go", 20*time.Minute+time.Second) // the fade-out
-			if r := m.apple.resume; r == nil || r.trackID != "i.a1" || r.pos != 20*time.Minute {
-				t.Fatalf("apple resume point after the fade = %+v", r)
-			}
-			if via == "enter" {
-				localPlaying(m, false)
-			}
-			stopped(m)
-			key(m, "L")
-			if via == "enter" {
-				localPlaying(m, false)
-				key(m, "space") // first push: stops the local music
-				stopped(m)
-			}
-			fp.seeks = nil
-			key(m, "space") // continues Apple Music
-			if len(fp.ids) != 2 || fp.ids[fp.start] != "i.a1" {
-				t.Fatalf("continue: ids = %v start = %d", fp.ids, fp.start)
-			}
-			m.Update(stateMsg{s: player.State{Loading: true, QueueIndex: 0, QueueLength: 2, Track: &player.NowPlaying{ID: "i.a1"}}, ok: true})
-			m.Update(stateMsg{s: player.State{Playing: true, QueueIndex: 0, QueueLength: 2, Track: &player.NowPlaying{ID: "i.a1"}}, ok: true})
-			if len(fp.seeks) != 1 || fp.seeks[0] != 20*time.Minute {
-				t.Fatalf("seeks = %v, want [20m0s]", fp.seeks)
-			}
-		})
-	}
-}
-
-// The cursor moves to another album before the switch: the resume point
-// still shows in the bar, with the track of the player.
-func TestResumeShownAfterCursorMoved(t *testing.T) {
-	fp := &fakePlayer{}
-	m := New(context.Background(), Deps{Store: localStore(t), Player: fp,
-		ScanLocal: func(context.Context, func(int, int)) (int, error) { return 0, nil }})
-	m.Update(tea.WindowSizeMsg{Width: 140, Height: 24})
-	drive(m, m.Init())
-	key(m, "j")
-	key(m, "tab")
-	key(m, "j")
-	key(m, "j")
-	key(m, "enter") // Geogaddi
-	playing(m, "i.a1", "Ready Lets Go", 20*time.Minute)
+// A switch of mode puts the cursor on the current track of that mode: its
+// resume point, with the resume time on the row, or its paused track.
+func TestSwitchJumpsToCurrentTrack(t *testing.T) {
+	m, fp := newModesModel(t)
+	playGeogaddi(m)
 	key(m, "2")
 	key(m, "j") // the album cursor: Music Has the Right to Children
 	key(m, "L")
-	key(m, "space")
-	stopped(m)
+	playEmbrace(m)
+	playing(m, "i.a1", "Ready Lets Go", 31*time.Second) // Apple fades out
+	localPlaying(m, false)
+
+	// Back in Apple Music: the cursor is on Geogaddi, track 1, and the row
+	// shows the resume time. The bar shows what plays (Embrace I).
 	key(m, "L")
-	r := m.apple.resume
-	if r == nil || r.track == nil || r.pos != 20*time.Minute {
-		t.Fatalf("resume point = %+v", r)
+	if a, ok := m.selectedAlbum(); !ok || a.Title != "Geogaddi" || m.focus != paneTracks {
+		t.Fatalf("album %+v, focus %d", a, m.focus)
 	}
-	if s := screen(m); !strings.Contains(s, "Ready Lets Go") || !strings.Contains(s, "space resumes") {
-		t.Fatalf("bar does not show the resume point:\n%s", s)
+	s := screen(m)
+	if !strings.Contains(s, "‖ 0:30 / 1:00") || !strings.Contains(s, "Embrace I") {
+		t.Fatalf("resume row or bar:\n%s", s)
+	}
+	fp.seeks = nil
+	key(m, "enter") // on the resume track: continue at 0:30
+	if len(fp.ids) != 2 || fp.ids[fp.start] != "i.a1" {
+		t.Fatalf("enter: PlayTracks(%v, %d)", fp.ids, fp.start)
+	}
+	m.Update(stateMsg{s: player.State{Playing: true, QueueIndex: 0, QueueLength: 2, Track: &player.NowPlaying{ID: "i.a1"}}, ok: true})
+	if len(fp.seeks) != 1 || fp.seeks[0] != 30*time.Second {
+		t.Fatalf("seeks = %v", fp.seeks)
+	}
+
+	// Pause Apple, move the cursor away, switch twice: back on the paused track.
+	m.Update(stateMsg{s: player.State{Position: 40 * time.Second, QueueIndex: 0, QueueLength: 2,
+		Track: &player.NowPlaying{ID: "i.a1", Title: "Ready Lets Go"}}, ok: true})
+	key(m, "1")
+	key(m, "j") // Broadcast
+	key(m, "L")
+	key(m, "L")
+	if a, ok := m.selectedAlbum(); !ok || a.Title != "Geogaddi" || m.focus != paneTracks {
+		t.Fatalf("paused: album %+v, focus %d", a, m.focus)
+	}
+}
+
+// During the fade-out, the old track still sends states: they must not
+// delete the resume point of its mode.
+func TestResumePointSurvivesFade(t *testing.T) {
+	m, _ := newModesModel(t)
+	playGeogaddi(m)
+	key(m, "L")
+	playEmbrace(m)
+	playing(m, "i.a1", "Ready Lets Go", 31*time.Second) // the fade-out
+	if r := m.apple.resume; r == nil || r.trackID != "i.a1" || r.pos != 30*time.Second || r.track == nil {
+		t.Fatalf("apple resume point = %+v", r)
 	}
 }

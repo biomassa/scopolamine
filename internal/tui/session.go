@@ -189,8 +189,10 @@ func (m *Model) maybeSeek(s player.State) {
 		return
 	}
 	if s.Track.ID != ps.trackID {
-		if s.Playing && !s.Loading {
-			m.pendingSeek = nil // something else is playing; drop it
+		// Another track of the new queue plays: drop the seek. A track that
+		// is not in the queue is a report from before the queue started.
+		if _, inQueue := m.queueAlbums[s.Track.ID]; inQueue && s.Playing && !s.Loading {
+			m.pendingSeek = nil
 		}
 		return
 	}

@@ -389,6 +389,9 @@ func (m *Model) trackCell(rows []trackRow, tracks []library.Track, nums []string
 	if !t.Playable {
 		c.right, c.dim = "unavailable", true
 	}
+	if r := m.resume; r != nil && t.ID == r.trackID && m.mode != modeSearch {
+		c.right = "‖ " + fmtDur(r.pos) + " / " + fmtDur(t.Duration)
+	}
 	if m.state.Track != nil && t.ID == m.state.Track.ID {
 		c.playing, c.paused = true, !m.state.Playing
 	}
@@ -549,7 +552,7 @@ func (m *Model) renderHelp() string {
 		{"g G  pgup pgdn", "top / bottom / page"},
 		{"/", "filter the focused column (esc clears)"},
 		{"enter", "play album (from the selected track in Tracks)"},
-		{"space", "play / pause (after a restart: resume where you left off; in the other mode: stop, then continue this mode's track)"},
+		{"space", "play / pause (with nothing playing: continue the resume point)"},
 		{"] [  (n p)", "next / previous track"},
 		{"→ ←  (. ,)", "seek ±10 s"},
 		{"shift+→ shift+←", "seek ±60 s"},

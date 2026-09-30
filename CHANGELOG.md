@@ -7,6 +7,15 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Changed
+
+- `space` pauses and resumes what plays, in any mode. With nothing playing, it continues the resume point of the mode that shows.
+- When a mode shows, the cursor goes to its current track: the track that plays or is paused, else the resume point. The resume track row shows the resume time.
+
+### Fixed
+
+- In the local mode, a resume point that was not the first track of the queue started again at 0:00.
+
 ## [0.5.1] - 2026-09-30
 
 ### Changed
