@@ -7,6 +7,12 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-10-01
+
+### Changed
+
+- A new disclaimer in the README.
+
 ## [0.5.3] - 2026-09-30
 
 ### Changed
@@ -145,7 +151,7 @@ Removal:
 Sign-in and tokens:
 
 - `scopolamine login` opens music.apple.com in a Chrome window. After the sign-in, it gets the user token. `scopolamine logout` removes the user token.
-- The developer token comes from `SCOPOLAMINE_DEV_TOKEN`, from the config file, or from the music.apple.com web player. `scopolamine token` shows the source and the expiry date. `scopolamine token refresh` gets the token again.
+- The developer token comes from `SCOPOLAMINE_DEV_TOKEN`, from the config file, or from music.apple.com. `scopolamine token` shows the source and the expiry date. `scopolamine token refresh` gets the token again.
 
 Commands:
 
@@ -155,7 +161,8 @@ License:
 
 - MIT license. Parts of the code come from vibez by Simone Pelosi (MIT license). NOTICE and THIRD_PARTY_LICENSES.md give the details.
 
-[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/biomassa/scopolamine/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/biomassa/scopolamine/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/biomassa/scopolamine/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/biomassa/scopolamine/compare/v0.5.0...v0.5.1
