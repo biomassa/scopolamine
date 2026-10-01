@@ -203,7 +203,7 @@ scopolamine puts the full album into one MusicKit queue. MusicKit then goes to t
 | `~/.config/scopolamine/config.json`         | The user token, the volume, the theme, the local folder (`local_root`), and other settings. Mode 0600. |
 | `~/.cache/scopolamine/library.db`           | The library cache (SQLite).                                                                            |
 | `~/.cache/scopolamine/session.json`         | The resume data of both modes.                                                                         |
-| `~/.cache/scopolamine/webplayer-token.json` | The web player token.                                                                                  |
+| `~/.cache/scopolamine/webplayer-token.json` | The cached developer token.                                                                            |
 | `~/.cache/scopolamine/player.log`           | The player log of the last run.                                                                        |
 | `~/.cache/scopolamine/art/`                 | The album covers.                                                                                      |
 | `~/.cache/scopolamine/chrome/`              | The private copy of Google Chrome.                                                                     |
@@ -245,6 +245,10 @@ scopolamine downloads Google Chrome and the Playwright driver at run time. They 
 
 ## Disclaimer
 
-scopolamine is not affiliated with Apple or endorsed by Apple. Apple Music and MusicKit are trademarks of Apple Inc.
+scopolamine is an independent project. It is not affiliated with, endorsed by, or supported by Apple Inc. Apple, Apple Music, and MusicKit are trademarks of Apple Inc.
 
-scopolamine comes "as is", without a warranty of any kind (see the [MIT license](LICENSE)). The author is not liable for any loss of data or other damage that scopolamine causes, directly or indirectly. This includes the albums in your Apple Music library. You are responsible for your use of the program.
+scopolamine does not supply, download, or store music from Apple Music. It plays the streams of your own Apple Music subscription in Google Chrome, through MusicKit JS from Apple. It does not remove or work around copy protection.
+
+To use the Apple Music mode, you must have your own Apple Music subscription. Your use of Apple Music, also through scopolamine, is subject to your agreements with Apple. You are responsible for your compliance with these agreements.
+
+scopolamine comes "as is", without a warranty of any kind (see the [MIT license](LICENSE)). The author is not liable for any loss of data or other damage that scopolamine causes, directly or indirectly. This includes the albums in your Apple Music library.

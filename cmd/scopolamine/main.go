@@ -113,7 +113,7 @@ func devToken(ctx context.Context, cfg *config.Config) (devtoken.Token, error) {
 		return devtoken.Token{}, fmt.Errorf(`%w
 
 scopolamine needs an Apple Music developer token (a JWT that identifies the
-app to Apple). It normally reads the music.apple.com web player's token; you
+app to Apple). It normally uses the token of music.apple.com; you
 can also provide one with:
   export %s=<token>
   or "developer_token": "<token>" in %s`, err, devtoken.EnvVar, config.DefaultPath())
