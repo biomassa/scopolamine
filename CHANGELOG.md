@@ -7,6 +7,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-01
+
 ### Added
 
 - `F` sets the local music folder in the program. `L` opens the folder box when no folder is set.
@@ -166,7 +168,8 @@ License:
 
 - MIT license. Parts of the code come from vibez by Simone Pelosi (MIT license). NOTICE and THIRD_PARTY_LICENSES.md give the details.
 
-[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/biomassa/scopolamine/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/biomassa/scopolamine/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/biomassa/scopolamine/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/biomassa/scopolamine/compare/v0.5.1...v0.5.2
