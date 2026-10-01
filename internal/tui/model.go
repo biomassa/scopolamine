@@ -51,6 +51,13 @@ type Deps struct {
 
 	// ScanLocal scans the local library folder (nil: no local mode).
 	ScanLocal func(ctx context.Context, progress func(done, total int)) (changed int, err error)
+	// LocalRoot is the local music folder, or "" if it does not exist.
+	LocalRoot string
+	// DefaultLocalRoot is the folder for an empty input in the folder box.
+	DefaultLocalRoot string
+	// SetLocalRoot makes path the local music folder and saves it (nil: the
+	// folder cannot change).
+	SetLocalRoot func(path string) error
 	// StartApple starts the Apple Music player when the Apple view shows and
 	// the player does not run (nil: nothing to start). It returns at once;
 	// a PlayerReadyMsg or PlayerFailedMsg follows.
@@ -100,11 +107,13 @@ type (
 	}
 	syncDoneMsg struct {
 		src string
+		v   *libView // the view that started the sync
 		n   int
 		err error
 	}
 	syncProgressMsg struct {
 		src      string
+		v        *libView
 		n, total int
 	}
 	stateMsg struct {
@@ -208,6 +217,9 @@ type Model struct {
 	appleFailed  bool // the last start failed; the next switch tries again
 
 	quitting bool // q: the music fades out, then the program quits
+
+	localRoot string        // the local music folder, or ""
+	folder    *folderPrompt // the open folder box, or nil
 }
 
 type pendingPlay struct {
@@ -217,7 +229,7 @@ type pendingPlay struct {
 
 // New builds the model.
 func New(ctx context.Context, d Deps) *Model {
-	m := &Model{deps: d, ctx: ctx, volume: d.Volume}
+	m := &Model{deps: d, ctx: ctx, volume: d.Volume, localRoot: d.LocalRoot}
 	if m.volume <= 0 {
 		m.volume = 1
 	}
@@ -241,7 +253,7 @@ func (m *Model) Init() tea.Cmd {
 	if m.deps.AutoSync && m.deps.Src != nil {
 		cmds = append(cmds, m.inView(m.apple, m.startSync))
 	}
-	if m.deps.ScanLocal != nil {
+	if m.localAvailable() {
 		cmds = append(cmds, m.inView(m.local, m.startSync))
 	}
 	if m.deps.Player != nil {
@@ -286,7 +298,7 @@ func (m *Model) startSync() tea.Cmd {
 		return nil
 	}
 	if m.source == library.SourceLocal {
-		if m.deps.ScanLocal == nil {
+		if !m.localAvailable() {
 			return nil
 		}
 	} else if m.deps.Src == nil {
@@ -338,14 +350,14 @@ func (m *Model) loadAlbums(artist string) tea.Cmd {
 // syncCmd runs the album sync in the background. Progress and the final
 // result arrive through one channel, read one message per command.
 func (m *Model) syncCmd() tea.Cmd {
-	store, apple, scan, source := m.deps.Store, m.deps.Src, m.deps.ScanLocal, m.source
+	store, apple, scan, source, v := m.deps.Store, m.deps.Src, m.deps.ScanLocal, m.source, m.libView
 	ch := make(chan tea.Msg, 1)
 	go func() {
 		ctx, cancel := context.WithTimeout(m.ctx, 30*time.Minute)
 		defer cancel()
 		progress := func(n, total int) {
 			select { // drop intermediate updates the UI hasn't read yet
-			case ch <- syncProgressMsg{source, n, total}:
+			case ch <- syncProgressMsg{source, v, n, total}:
 			default:
 			}
 		}
@@ -358,7 +370,7 @@ func (m *Model) syncCmd() tea.Cmd {
 		} else {
 			n, err = library.SyncAppleAlbums(ctx, store, apple, progress)
 		}
-		ch <- syncDoneMsg{source, n, err}
+		ch <- syncDoneMsg{source, v, n, err}
 	}()
 	m.syncCh = ch
 	return m.readSync()
@@ -449,12 +461,18 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.inView(m.view(msg.src), func() tea.Cmd { return m.onTracks(msg) })
 
 	case syncProgressMsg:
+		if msg.v != m.view(msg.src) {
+			return m, nil // a scan of an old local folder
+		}
 		return m, m.inView(m.view(msg.src), func() tea.Cmd {
 			m.syncN, m.syncOf = msg.n, msg.total
 			return m.readSync()
 		})
 
 	case syncDoneMsg:
+		if msg.v != m.view(msg.src) {
+			return m, m.inView(m.view(msg.src), m.loadArtists) // a scan of an old local folder
+		}
 		return m, m.inView(m.view(msg.src), func() tea.Cmd {
 			m.syncing = false
 			m.syncN, m.syncOf = 0, 0
@@ -516,6 +534,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, tea.Batch(m.applyState(msg.s), m.maybeStopApple(), m.stateCh)
+
+	case localRootSetMsg:
+		return m, m.onLocalRootSet(msg)
 
 	case resumeInfoMsg:
 		v := m.view(msg.src)
@@ -925,6 +946,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	if m.quitting {
 		return nil // only ctrl+c stops the fade
 	}
+	if m.folder != nil {
+		return m.handleFolderKey(msg, k)
+	}
 	if m.themes != nil {
 		return m.handleThemeKey(k)
 	}
@@ -960,6 +984,12 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		return m.toggleFolders()
+	case "F":
+		if !local || m.deps.SetLocalRoot == nil {
+			return nil
+		}
+		m.openFolderPrompt()
+		return nil
 	case "s":
 		if local {
 			return nil // no search in local mode
@@ -1083,7 +1113,11 @@ func (m *Model) playbackKey(k string) (tea.Cmd, bool) {
 // keeps its own selection; the music plays on.
 func (m *Model) switchMode() tea.Cmd {
 	if m.source == library.SourceApple {
-		if m.deps.ScanLocal == nil {
+		if !m.localAvailable() {
+			if m.deps.SetLocalRoot != nil {
+				m.openFolderPrompt() // no folder yet: ask for one
+				return nil
+			}
 			return m.flash("no local library (set local_root in the config)", true)
 		}
 		m.filtering = false

@@ -298,22 +298,87 @@ func runTUI(ctx context.Context, offline bool, themeOverride string) error {
 	}
 
 	var startupErrs []error
-	root := cfg.LocalLibrary()
-	if st, err := os.Stat(root); err == nil && st.IsDir() {
-		scanner := &localscan.Scanner{Root: root}
-		deps.ScanLocal = func(ctx context.Context, progress func(done, total int)) (int, error) {
-			res, err := scanner.Scan(ctx, store, progress)
-			return res.Changed + res.Removed, err
+	// The local mode: the folder can change at run time (F in the TUI).
+	var (
+		scanMu   sync.Mutex // one scan at a time
+		rootMu   sync.Mutex // root and stopScan
+		root     = cfg.LocalLibrary()
+		stopScan context.CancelFunc
+		localMu  sync.Mutex
+		local    *mpv.Player
+		unwatch  context.CancelFunc
+	)
+	deps.ScanLocal = func(ctx context.Context, progress func(done, total int)) (int, error) {
+		scanMu.Lock()
+		defer scanMu.Unlock()
+		rootMu.Lock()
+		dir := root
+		sctx, cancel := context.WithCancel(ctx)
+		stopScan = cancel
+		rootMu.Unlock()
+		defer cancel()
+		res, err := (&localscan.Scanner{Root: dir}).Scan(sctx, store, progress)
+		if sctx.Err() != nil && ctx.Err() == nil {
+			return 0, nil // a new folder stopped this scan
 		}
-		local, err := mpv.New(ctx, mpv.Options{Resolve: localResolver(ctx, store)})
+		return res.Changed + res.Removed, err
+	}
+	deps.DefaultLocalRoot = config.MusicDir()
+	startLocal := func() error {
+		localMu.Lock()
+		defer localMu.Unlock()
+		if local != nil {
+			return nil
+		}
+		p, err := mpv.New(ctx, mpv.Options{Resolve: localResolver(ctx, store)})
 		if err != nil {
-			startupErrs = append(startupErrs, fmt.Errorf("local playback: %w", err))
-		} else {
-			rt.Attach(router.Local, local)
+			return fmt.Errorf("local playback: %w", err)
+		}
+		local = p
+		rt.Attach(router.Local, p)
+		return nil
+	}
+	if isDir(root) {
+		deps.LocalRoot = root
+		if err := startLocal(); err != nil {
+			startupErrs = append(startupErrs, err)
 		}
 	}
 
 	var prog *tea.Program
+	// watch follows the local folder: new downloads show up by themselves.
+	watch := func(dir string) {
+		localMu.Lock()
+		defer localMu.Unlock()
+		if unwatch != nil {
+			unwatch()
+		}
+		wctx, cancel := context.WithCancel(ctx)
+		unwatch = cancel
+		go func() { _ = localscan.Watch(wctx, dir, func() { prog.Send(tui.LocalChangedMsg{}) }) }()
+	}
+	deps.SetLocalRoot = func(path string) error {
+		if !isDir(path) {
+			return fmt.Errorf("not a folder: %s", path)
+		}
+		if err := startLocal(); err != nil {
+			return err
+		}
+		rootMu.Lock()
+		root = path
+		if stopScan != nil {
+			stopScan() // a scan of the old folder
+		}
+		rootMu.Unlock()
+		watch(path)
+		cfgMu.Lock()
+		defer cfgMu.Unlock()
+		cfg.LocalRoot = path
+		if path == config.MusicDir() {
+			cfg.LocalRoot = "" // the default follows $XDG_MUSIC_DIR
+		}
+		return cfg.Save()
+	}
 	var (
 		mu      sync.Mutex
 		stopped bool
@@ -358,9 +423,8 @@ func runTUI(ctx context.Context, offline bool, themeOverride string) error {
 
 	model := tui.New(ctx, deps)
 	prog = tea.NewProgram(model, tea.WithContext(ctx))
-	if deps.ScanLocal != nil {
-		// New downloads show up by themselves.
-		go func() { _ = localscan.Watch(ctx, root, func() { prog.Send(tui.LocalChangedMsg{}) }) }()
+	if deps.LocalRoot != "" {
+		watch(deps.LocalRoot)
 	}
 	for _, err := range startupErrs {
 		go prog.Send(tui.PlayerFailedMsg{Err: err})
@@ -477,4 +541,9 @@ func loginWindow(ctx context.Context, dt devtoken.Token) (string, error) {
 	fmt.Println("Click \"Sign In\" (top right) and sign in with your Apple ID;")
 	fmt.Println("the window closes by itself once scopolamine sees you are signed in.")
 	return cdp.LoginWindow(ctx, dt.Origin, "")
+}
+
+func isDir(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && st.IsDir()
 }

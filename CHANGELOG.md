@@ -7,6 +7,11 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Added
+
+- `F` sets the local music folder in the program. `L` opens the folder box when no folder is set.
+- In the search, `m` and `M` mark albums, and `a` adds all marked albums.
+
 ## [0.5.4] - 2026-10-01
 
 ### Changed

@@ -99,7 +99,7 @@ func (m *Model) applySession(s *Session) {
 	}
 	m.inView(m.apple, func() tea.Cmd { m.applyViewSession(apple); return nil })
 	m.inView(m.local, func() tea.Cmd { m.applyViewSession(s.Local); return nil })
-	if s.LastMode == library.SourceLocal && m.deps.ScanLocal != nil {
+	if s.LastMode == library.SourceLocal && m.localAvailable() {
 		m.libView = m.local
 	}
 }

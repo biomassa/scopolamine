@@ -106,6 +106,7 @@ To sign in with a different account, use `scopolamine logout` and then `scopolam
 | `o`                    | Go to the album that plays.                                                                                                                                                                                                                |
 | `L`                    | Switch between the Apple Music mode and the local mode.                                                                                                                                                                                    |
 | `v`                    | Local mode: sort by metadata or by folders.                                                                                                                                                                                                |
+| `F`                    | Local mode: set the music folder.                                                                                                                                                                                                          |
 | `s`                    | Search Apple Music. Not in the local mode.                                                                                                                                                                                                 |
 | `D`                    | Remove the album from your Apple Music library. scopolamine asks first. Not in the local mode.                                                                                                                                             |
 | `R`                    | Sync the Apple Music album list, or scan the local folder.                                                                                                                                                                                 |
@@ -125,6 +126,7 @@ The "All" rows use the accent color of the theme. They stay at the top of their 
 - **Albums**: "✓ in library" marks the albums that are in your library. A pale "single" tag at the right marks the singles.
 - `enter` plays an album. It does not add the album to your library.
 - `a` adds the album to your library. The album shows in the library view immediately.
+- `m` marks the album under the cursor. `M` marks all albums of the column that are not in the library, without singles. With marks, `a` adds all marked albums.
 - `D` removes an album that has the "✓ in library" mark.
 - `s` or `/` changes the search text. `esc` returns to the library view.
 
@@ -142,7 +144,7 @@ The search uses the catalog of your country only.
 
 `L` switches between the Apple Music mode and the local mode. Each mode keeps its selection, its column, and its sort order. The music continues when you switch. When you start music in the other mode, the music of the first mode stops. The first mode keeps its track and position. With the cursor on that track, `enter` continues at the saved position.
 
-The local mode shows the folder in `local_root` in `~/.config/scopolamine/config.json`. If `local_root` is empty, it shows `$XDG_MUSIC_DIR`, else `~/Music`. scopolamine never writes to your music files.
+The local mode shows the folder in `local_root` in `~/.config/scopolamine/config.json`. If `local_root` is empty, it shows `$XDG_MUSIC_DIR`, else `~/Music`. Push `F` to change the folder. `tab` completes folder names. An empty input selects the default folder. scopolamine never writes to your music files.
 
 - scopolamine scans the folder at each start, after `R`, and 3 seconds after a change of files in the folder. The scan reads only new and changed files, with ffprobe. It reads the tags, the length, the codec, the sample rate, and the bit depth.
 - All file types that mpv plays count as audio: FLAC, MP3, M4A (AAC and ALAC), Ogg, Opus, WAV, AIFF, WavPack, APE, DSF, and others.

@@ -63,15 +63,22 @@ func (m *Model) legendItems() []legendItem {
 	case m.filtering:
 		return append([]legendItem{{"", "type to filter"}}, keys("enter", "play", "esc", "clear")...)
 	case m.mode == modeSearch:
-		return keys("enter", "play", "a", "add", "D", "remove", "s", "edit search", "esc", "library", "space", "pause",
-			"←/→", "seek", "+/-", "vol", "T", "theme", "?", "help")
+		add := "add"
+		if n := len(m.search.marked); n > 0 {
+			add = fmt.Sprintf("add %d", n)
+		}
+		return keys("enter", "play", "a", add, "m", "mark", "M", "mark all", "D", "remove", "s", "edit search", "esc", "library",
+			"space", "pause", "←/→", "seek", "+/-", "vol", "T", "theme", "?", "help")
 	case m.source == library.SourceLocal:
-		return keys("enter", "play", "space", "pause", "[ ]", "track", "←/→", "seek", "+/-", "vol", "/", "filter",
-			"v", "sort", "L", "Apple Music", "o", "playing", "T", "theme", "?", "help")
+		items := keys("enter", "play", "space", "pause", "[ ]", "track", "←/→", "seek", "+/-", "vol", "/", "filter", "v", "sort")
+		if m.deps.SetLocalRoot != nil {
+			items = append(items, legendItem{"F", "folder"})
+		}
+		return append(items, keys("L", "Apple Music", "o", "playing", "T", "theme", "?", "help")...)
 	}
 	items := keys("enter", "play", "space", "pause", "[ ]", "track", "←/→", "seek", "+/-", "vol", "/", "filter",
 		"s", "search", "D", "remove")
-	if m.deps.ScanLocal != nil {
+	if m.localAvailable() || m.deps.SetLocalRoot != nil {
 		items = append(items, legendItem{"L", "local"})
 	}
 	return append(items, keys("o", "playing", "T", "theme", "?", "help")...)
@@ -203,6 +210,10 @@ func (m *Model) View() tea.View {
 		box, w := m.themeBox()
 		screen = overlay(screen, box, max(0, m.width-w-1), 1)
 	}
+	if m.folder != nil {
+		box, w := m.folderBox()
+		screen = overlay(screen, box, max(0, m.width-w-1), 1)
+	}
 	v := tea.NewView(screen)
 	v.AltScreen = true
 	if themeBg != "" { // a palette theme sets the terminal background while scopolamine runs
@@ -256,6 +267,7 @@ type cell struct {
 	dim         bool
 	rightDim    bool // the right text is pale
 	all         bool // an "All" row: accent color, pinned at the top
+	marked      bool // search: marked for a multiple add (●)
 }
 
 // renderColumn returns h+1 lines (title + h rows) of p, each exactly w cells.
@@ -325,11 +337,14 @@ func (m *Model) renderColumn(p *pane, w, h int, focused, filtering bool, empty s
 // renderCell draws one row of width w.
 func (m *Model) renderCell(c cell, w int, cursor, focused bool) string {
 	mark := "  "
-	if c.playing {
+	switch {
+	case c.playing:
 		mark = "▶ "
 		if c.paused {
 			mark = "‖ "
 		}
+	case c.marked:
+		mark = "● "
 	}
 	right := " " + c.right + " "
 	st := stRow
@@ -355,9 +370,21 @@ func (m *Model) renderCell(c cell, w int, cursor, focused bool) string {
 		case cursor:
 			pale = stSelPale
 		}
-		return st.Render(fit(mark+c.left, w-ansi.StringWidth(right))) + pale.Render(right)
+		return markSt(c, st, cursor).Render(mark) + st.Render(fit(c.left, w-2-ansi.StringWidth(right))) + pale.Render(right)
 	}
-	return st.Render(leftRight(mark+c.left, right, w))
+	if w < 2 {
+		return st.Render(leftRight(mark+c.left, right, w))
+	}
+	return markSt(c, st, cursor).Render(mark) + st.Render(leftRight(c.left, right, w-2))
+}
+
+// markSt is the style of the mark column: the ● of a marked row is in the
+// accent color, except on the cursor row.
+func markSt(c cell, st lipgloss.Style, cursor bool) lipgloss.Style {
+	if c.marked && !c.playing && !cursor {
+		return stPlaying
+	}
+	return st
 }
 
 // trackCell renders row idx of a tracks column (shared by library and
@@ -562,10 +589,13 @@ func (m *Model) renderHelp() string {
 		{"R", "sync the Apple Music library, or scan the local folder"},
 		{"s", "search Apple Music (esc returns to the library)"},
 		{"a", "in search: add the album to your library"},
+		{"m", "search: mark an album"},
+		{"M", "mark all albums that are not in the library"},
 		{"D", "remove the album from your library (asks first)"},
 		{"T", "choose a color theme (live preview, enter keeps it)"},
 		{"L", "switch between Apple Music and the local library"},
 		{"v", "local library: sort by metadata or by folders"},
+		{"F", "local mode: set the music folder"},
 		{"q  ctrl+c", "quit"},
 	}
 	var b strings.Builder

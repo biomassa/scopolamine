@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ type fakeCatalog struct {
 	searches []string
 	added    []string
 	deleted  []string
+	failAdd  map[string]bool
 }
 
 func (f *fakeCatalog) DeleteLibraryAlbum(_ context.Context, id string) error {
@@ -48,6 +50,9 @@ func (f *fakeCatalog) CatalogAlbumTracks(_ context.Context, id string) ([]applem
 
 func (f *fakeCatalog) AddAlbumAndWait(_ context.Context, id string) (applemusic.Album, error) {
 	f.added = append(f.added, id)
+	if f.failAdd[id] {
+		return applemusic.Album{}, errors.New("not available")
+	}
 	return applemusic.Album{ID: "l.new", CatalogID: id, Title: "Submers", Artist: "Loscil", ReleaseDate: "2002-01-01", TrackCount: 2}, nil
 }
 
@@ -209,5 +214,64 @@ func TestRemoveFromLibrary(t *testing.T) {
 	key(m, "D") // no longer in the library
 	if m.confirm != nil {
 		t.Fatal("asked to remove an album that is not in the library")
+	}
+}
+
+// m and M mark albums of one artist; a adds all marked albums, one after the
+// other; a failed album keeps its mark.
+func TestMarkAndAddMany(t *testing.T) {
+	store := fixtureStore(t)
+	cat := &fakeCatalog{}
+	m := New(context.Background(), Deps{Store: store, Player: &fakePlayer{}, Catalog: cat})
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 22})
+	drive(m, m.Init())
+	key(m, "s")
+	typeText(m, "loscil")
+	key(m, "enter")
+	key(m, "j")   // the artist Loscil: Submers (single), Plume (in library)
+	key(m, "tab") // Albums
+	s := m.search
+
+	key(m, "m") // Submers: marked, the cursor moves to Plume
+	key(m, "m") // Plume is in the library: no mark
+	if len(s.marked) != 1 || !s.marked["200"] {
+		t.Fatalf("marked = %v", s.marked)
+	}
+	if !strings.Contains(screen(m), "● 2002  Submers") || !strings.Contains(screen(m), "a add 1") {
+		t.Fatalf("mark not shown:\n%s", screen(m))
+	}
+	key(m, "M") // marks exist: M clears them
+	if len(s.marked) != 0 {
+		t.Fatalf("M did not clear: %v", s.marked)
+	}
+	key(m, "M") // all that are not in the library, without singles: none here
+	if len(s.marked) != 0 {
+		t.Fatalf("M marked a single or a library album: %v", s.marked)
+	}
+
+	// Two marked albums; the first add fails and keeps its mark.
+	s.albums = append(s.albums, applemusic.CatalogAlbum{Album: applemusic.Album{ID: "300", Title: "Endless Falls", Artist: "Loscil"}})
+	key(m, "M") // an album, not in the library: marked
+	if len(s.marked) != 1 || !s.marked["300"] {
+		t.Fatalf("M marked %v, want only 300", s.marked)
+	}
+	s.marked["200"] = true
+	cat.failAdd = map[string]bool{"200": true}
+	key(m, "a")
+	if len(cat.added) != 2 || cat.added[0] != "200" || cat.added[1] != "300" {
+		t.Fatalf("added = %v", cat.added)
+	}
+	if !s.marked["200"] || s.marked["300"] || s.bulk != nil {
+		t.Fatalf("marks after the add = %v, bulk = %v", s.marked, s.bulk)
+	}
+	if !strings.Contains(screen(m), "added 1 album · 1 failed") {
+		t.Fatalf("no summary:\n%s", screen(m))
+	}
+
+	// Another artist clears the marks.
+	key(m, "1")
+	key(m, "k")
+	if len(s.marked) != 0 {
+		t.Fatalf("marks of another artist kept: %v", s.marked)
 	}
 }

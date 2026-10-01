@@ -65,6 +65,8 @@ type searchState struct {
 	pendingPlay   *pendingPlay
 
 	adding map[string]bool // catalog album ids being added
+	marked map[string]bool // catalog album ids marked for a multiple add
+	bulk   *bulkAdd        // the multiple add that runs, or nil
 }
 
 type (
@@ -90,13 +92,14 @@ type (
 		catalogID string
 		album     library.Album
 		err       error
+		bulk      bool // part of a multiple add
 	}
 )
 
 const searchDebounce = 400 * time.Millisecond
 
 func newSearchState() *searchState {
-	s := &searchState{adding: map[string]bool{}}
+	s := &searchState{adding: map[string]bool{}, marked: map[string]bool{}}
 	s.panes[paneArtists] = &pane{title: "Artists"}
 	s.panes[paneAlbums] = &pane{title: "Albums"}
 	s.panes[paneTracks] = &pane{title: "Tracks"}
@@ -198,6 +201,9 @@ func (m *Model) searchArtistChanged() tea.Cmd {
 
 func (m *Model) setSearchAlbums(artistID string, albums []applemusic.CatalogAlbum) {
 	s := m.search
+	if artistID != s.albumsFor {
+		s.marked = map[string]bool{} // marks belong to one artist
+	}
 	s.albumsFor, s.albums = artistID, albums
 	s.panes[paneAlbums].setItems(searchAlbumLabels(albums, artistID == ""))
 }
@@ -457,6 +463,9 @@ func (m *Model) updateSearch(msg tea.Msg) tea.Cmd {
 
 	case addedMsg:
 		delete(s.adding, msg.catalogID)
+		if msg.bulk {
+			return m.onBulkAdded(msg)
+		}
 		if msg.err != nil {
 			return m.flash("could not add to library: "+msg.err.Error(), true)
 		}
@@ -535,7 +544,15 @@ func (m *Model) handleSearchKey(msg tea.KeyPressMsg, k string) tea.Cmd {
 		s.editing = true
 		return nil
 	case "a":
+		if len(s.marked) > 0 {
+			return m.addMarked()
+		}
 		return m.addSelected()
+	case "m":
+		return m.markSelected()
+	case "M":
+		m.markAll()
+		return nil
 	case "D":
 		a, ok := s.selectedAlbum()
 		if s.focus == paneTracks || !ok {
@@ -648,7 +665,7 @@ func (m *Model) renderSearch() string {
 	}
 	albums := m.renderColumn(s.panes[paneAlbums], w1, h, focusOf(paneAlbums), false, albumsEmpty, func(idx int) cell {
 		a := s.albums[idx]
-		c := cell{left: s.panes[paneAlbums].labels[idx], playing: a.ID == m.playingAlbum.ID}
+		c := cell{left: s.panes[paneAlbums].labels[idx], playing: a.ID == m.playingAlbum.ID, marked: s.marked[a.ID]}
 		switch {
 		case s.adding[a.ID]:
 			c.right = "adding…"
@@ -681,4 +698,131 @@ func (m *Model) renderSearch() string {
 	}
 	b.WriteString(m.renderBar())
 	return b.String()
+}
+
+// bulkAdd is a multiple add: the marked albums, added one after the other.
+type bulkAdd struct {
+	queue         []applemusic.CatalogAlbum
+	total         int
+	added, failed int
+}
+
+// markSelected toggles the mark of the album under the cursor and moves the
+// cursor down. Albums in the library get no mark.
+func (m *Model) markSelected() tea.Cmd {
+	s := m.search
+	if s.focus != paneAlbums {
+		return nil
+	}
+	a, ok := s.selectedAlbum()
+	if !ok {
+		return nil
+	}
+	if a.LibraryID == "" && !s.adding[a.ID] {
+		if s.marked[a.ID] {
+			delete(s.marked, a.ID)
+		} else {
+			s.marked[a.ID] = true
+		}
+	}
+	s.panes[paneAlbums].move(1)
+	return m.searchAlbumChanged()
+}
+
+// markAll marks all albums of the column that are not in the library,
+// without singles. With marks, it clears them.
+func (m *Model) markAll() {
+	s := m.search
+	if len(s.marked) > 0 {
+		s.marked = map[string]bool{}
+		return
+	}
+	if s.albumsFor != s.albumsWant {
+		return
+	}
+	for _, a := range s.albums {
+		if a.LibraryID == "" && !a.Single && !s.adding[a.ID] {
+			s.marked[a.ID] = true
+		}
+	}
+}
+
+// addMarked adds the marked albums, in the order of the column.
+func (m *Model) addMarked() tea.Cmd {
+	s := m.search
+	if s.bulk != nil {
+		return nil
+	}
+	b := &bulkAdd{}
+	for _, a := range s.albums {
+		if s.marked[a.ID] && a.LibraryID == "" {
+			b.queue = append(b.queue, a)
+		}
+	}
+	if len(b.queue) == 0 {
+		s.marked = map[string]bool{}
+		return nil
+	}
+	b.total = len(b.queue)
+	s.bulk = b
+	return m.addNext()
+}
+
+// addNext adds the next album of the multiple add.
+func (m *Model) addNext() tea.Cmd {
+	s := m.search
+	b := s.bulk
+	a := b.queue[0]
+	b.queue = b.queue[1:]
+	s.adding[a.ID] = true
+	cat, store := m.deps.Catalog, m.deps.Store
+	n := b.added + b.failed + 1
+	return tea.Batch(m.flash(fmt.Sprintf("adding %d/%d…", n, b.total), false), func() tea.Msg {
+		ctx, cancel := context.WithTimeout(m.ctx, time.Minute)
+		defer cancel()
+		lib, err := cat.AddAlbumAndWait(ctx, a.ID)
+		if err != nil {
+			return addedMsg{catalogID: a.ID, err: err, bulk: true}
+		}
+		la := library.FromApple(lib)
+		if err := store.UpsertAlbum(ctx, library.SourceApple, la); err != nil {
+			return addedMsg{catalogID: a.ID, err: err, bulk: true}
+		}
+		return addedMsg{catalogID: a.ID, album: la, bulk: true}
+	})
+}
+
+// onBulkAdded records one result of the multiple add and adds the next
+// album. A failed album keeps its mark, so that a tries it again.
+func (m *Model) onBulkAdded(msg addedMsg) tea.Cmd {
+	s := m.search
+	b := s.bulk
+	if b == nil {
+		return nil
+	}
+	if msg.err != nil {
+		b.failed++
+	} else {
+		b.added++
+		delete(s.marked, msg.catalogID)
+		for _, list := range [][]applemusic.CatalogAlbum{s.albums, s.results} {
+			for i := range list {
+				if list[i].ID == msg.catalogID {
+					list[i].LibraryID = msg.album.ID
+				}
+			}
+		}
+	}
+	if len(b.queue) > 0 {
+		return m.addNext()
+	}
+	s.bulk = nil
+	done := fmt.Sprintf("added %d albums", b.added)
+	if b.added == 1 {
+		done = "added 1 album"
+	}
+	if b.failed > 0 {
+		done += fmt.Sprintf(" · %d failed", b.failed)
+	}
+	return tea.Batch(m.refreshLibrary(), m.flash(done, b.failed > 0))
 }
