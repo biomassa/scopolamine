@@ -696,6 +696,9 @@ func (m *Model) renderSearch() string {
 	for row := 0; row < h+1; row++ {
 		b.WriteString(artists[row] + sep + albums[row] + sep + tracks[row] + "\n")
 	}
+	m.recordColumns(1, [numPanes]int{w0, w1, w2}, s.panes)
+	m.hits.prompt = span{y: 0, x0: 0, x1: m.width}
+	m.hits.barTop = 1 + h + 1
 	b.WriteString(m.renderBar())
 	return b.String()
 }

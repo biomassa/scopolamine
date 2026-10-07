@@ -7,6 +7,10 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Added
+
+- Mouse support: a click selects, a double click plays or pauses, and a click on a legend key runs it. The wheel moves the cursor, and a click on the progress bar seeks.
+
 ## [0.6.0] - 2026-10-01
 
 ### Added

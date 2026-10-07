@@ -114,6 +114,16 @@ To sign in with a different account, use `scopolamine logout` and then `scopolam
 | `?`                    | Show the help and the version.                                                                                                                                                                                                             |
 | `q`                    | Quit.                                                                                                                                                                                                                                      |
 
+### Mouse
+
+- A click selects a row and focuses its column. A click on a column title focuses the column.
+- A double click on the row of the track that plays pauses it. A second double click continues it. On other rows, a double click does the same as `enter`.
+- A click on a key in the legend runs that key. In `[ ]`, `+/-`, and `←/→`, each symbol is a key.
+- A click on the progress bar seeks to that position.
+- The mouse wheel moves the cursor of the column under the mouse.
+- A click in a column stops the input of a filter or a search text. A click on the filtered column title or on the search line starts the input again.
+- In the theme picker, a click shows a theme and a double click keeps it. In the folder box, a click on a listed folder puts it into the path. A click outside the box closes it.
+
 ### "All" rows
 
 The "All" rows use the accent color of the theme. They stay at the top of their columns, and the list under them scrolls. "All artists" shows all the albums. "All albums" shows all the tracks of the selected artist, in groups by album. `enter` on "All albums" or on "All" plays all these tracks. When you select "All artists", "All albums" shows no tracks. The reason: that list needs one request for each album in the library.

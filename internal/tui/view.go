@@ -206,16 +206,22 @@ func leftRight(l, r string, w int) string {
 
 func (m *Model) View() tea.View {
 	screen := m.render()
-	if m.themes != nil {
-		box, w := m.themeBox()
-		screen = overlay(screen, box, max(0, m.width-w-1), 1)
+	var box []string
+	var w int
+	switch {
+	case m.themes != nil:
+		box, w = m.themeBox()
+	case m.folder != nil:
+		box, w = m.folderBox()
 	}
-	if m.folder != nil {
-		box, w := m.folderBox()
-		screen = overlay(screen, box, max(0, m.width-w-1), 1)
+	if box != nil {
+		x := max(0, m.width-w-1)
+		screen = overlay(screen, box, x, 1)
+		m.hits.box, m.hits.boxH = span{y: 1, x0: x, x1: x + w}, len(box)
 	}
 	v := tea.NewView(screen)
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	if themeBg != "" { // a palette theme sets the terminal background while scopolamine runs
 		v.BackgroundColor = lipgloss.Color(themeBg)
 	}
@@ -227,6 +233,7 @@ func (m *Model) View() tea.View {
 }
 
 func (m *Model) render() string {
+	m.hits = hitMap{}
 	if m.width < 20 || m.height < m.barHeight()+3 {
 		return "terminal too small"
 	}
@@ -245,6 +252,8 @@ func (m *Model) render() string {
 	for i := range numPanes {
 		cols[i] = m.renderPane(i, widths[i], h)
 	}
+	m.recordColumns(0, widths, m.panes)
+	m.hits.barTop = h + 1
 	var b strings.Builder
 	for row := 0; row < h+1; row++ {
 		b.WriteString(cols[0][row])
@@ -287,11 +296,13 @@ func (m *Model) renderColumn(p *pane, w, h int, focused, filtering bool, empty s
 	}
 	blank := strings.Repeat(" ", w)
 	lines := []string{ts.Render(leftRight(title, count, w))}
+	p.lineRows = []int{-1}
 	if h <= 0 {
 		return lines
 	}
 	// An empty line under the title.
 	lines = append(lines, blank)
+	p.lineRows = append(p.lineRows, -1)
 	avail := h - 1
 
 	row := func(mi int) string {
@@ -304,6 +315,7 @@ func (m *Model) renderColumn(p *pane, w, h int, focused, filtering bool, empty s
 	first, cursor := 0, p.cursor
 	if len(p.match) > 0 && avail >= 3 && cellAt(p.match[0]).all {
 		lines = append(lines, row(0), blank)
+		p.lineRows = append(p.lineRows, 0, -1)
 		avail -= 2
 		first, cursor = 1, p.cursor-1
 	}
@@ -327,9 +339,11 @@ func (m *Model) renderColumn(p *pane, w, h int, focused, filtering bool, empty s
 			} else {
 				lines = append(lines, blank)
 			}
+			p.lineRows = append(p.lineRows, -1)
 			continue
 		}
 		lines = append(lines, row(first+i))
+		p.lineRows = append(p.lineRows, first+i)
 	}
 	return lines
 }
@@ -534,6 +548,10 @@ func (m *Model) renderBar() string {
 	}
 	bar := stPlaying.Render(strings.Repeat("━", filled)) + stSep.Render(strings.Repeat("─", barW-filled))
 	b.WriteString(fit(left+bar+stDim.Render(right), w))
+	if s.Track != nil && dur > 0 && !resuming {
+		m.hits.bar = span{y: m.hits.barTop + 2, x0: lipgloss.Width(left), x1: lipgloss.Width(left) + barW}
+		m.hits.barDur = dur
+	}
 	b.WriteByte('\n')
 
 	// Lines 3+: the legend, or a notice or status in the first legend line.
@@ -565,6 +583,7 @@ func (m *Model) renderBar() string {
 			b.WriteString(strings.Repeat(" ", w)) // keep the bar height
 		default:
 			b.WriteString(fit(" "+legendText(l), w))
+			m.recordLegend(m.hits.barTop+3+i, l)
 		}
 	}
 	return b.String()

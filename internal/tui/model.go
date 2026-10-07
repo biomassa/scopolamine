@@ -220,6 +220,9 @@ type Model struct {
 
 	localRoot string        // the local music folder, or ""
 	folder    *folderPrompt // the open folder box, or nil
+
+	hits  hitMap    // where the parts of the last drawn screen are
+	click lastClick // the previous click, for double clicks
 }
 
 type pendingPlay struct {
@@ -534,6 +537,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, tea.Batch(m.applyState(msg.s), m.maybeStopApple(), m.stateCh)
+
+	case tea.MouseClickMsg:
+		return m, m.onClick(tea.Mouse(msg))
+
+	case tea.MouseWheelMsg:
+		return m, m.onWheel(tea.Mouse(msg))
 
 	case localRootSetMsg:
 		return m, m.onLocalRootSet(msg)

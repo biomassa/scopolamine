@@ -11,6 +11,9 @@ type pane struct {
 	cursor int      // index into match
 	offset int      // first visible row (index into match)
 	filter string
+	// lineRows is, for each line of the last drawn column (title first),
+	// the match index of the row on it, or -1. Mouse clicks use it.
+	lineRows []int
 }
 
 func (p *pane) setItems(labels []string) {

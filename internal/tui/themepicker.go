@@ -16,6 +16,8 @@ type themePicker struct {
 	names []string
 	cur   int
 	orig  string // the theme in use when the picker opened
+	off   int    // the first theme in the box, as last drawn
+	rows  int    // the number of themes in the box
 }
 
 type themeSavedMsg struct {
@@ -82,6 +84,7 @@ func (m *Model) themeBox() (lines []string, width int) {
 	inner := w - 2
 	rows := h - 5
 	off := max(0, min(p.cur-rows/2, len(p.names)-rows))
+	p.off, p.rows = off, rows
 	body := []string{strings.Repeat(" ", inner)}
 	for i := off; i < len(p.names) && i < off+rows; i++ {
 		label := themeLabel(p.names[i])
