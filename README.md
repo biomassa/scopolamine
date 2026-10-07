@@ -13,7 +13,7 @@ scopolamine is a terminal program for [Apple Music](https://music.apple.com) and
 - A full album plays as one queue. Thus the tracks follow each other without a new start for each track.
 - A fade-out of 0.2 seconds before a stop, a pause, a change of track, and the quit (`q`). A fade-in of 0.2 seconds after a pause.
 - Album covers at the bottom of the track column, in kitty and Ghostty.
-- 20 color themes with a live preview (`T`), as in godoist.
+- 20 color themes with a live preview (`T`), as in [godoist](https://github.com/biomassa/godoist).
 - A filter for each column (`/`).
 - A local mode (`L`) for the music files in a folder. The local mode sorts the files by metadata or by folders (`v`). mpv plays them without gaps.
 - A search of the Apple Music catalog (`s`), with the discography of each artist. A mark shows the albums that are in your library. You can play an album from the search, add it to your library (`a`), or remove it (`D`).
