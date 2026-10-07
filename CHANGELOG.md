@@ -7,6 +7,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-07
+
 ### Added
 
 - Mouse support: a click selects, a double click plays or pauses, and a click on a legend key runs it. The wheel moves the cursor, and a click on the progress bar seeks.
@@ -172,7 +174,8 @@ License:
 
 - MIT license. Parts of the code come from vibez by Simone Pelosi (MIT license). NOTICE and THIRD_PARTY_LICENSES.md give the details.
 
-[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/biomassa/scopolamine/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/biomassa/scopolamine/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/biomassa/scopolamine/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/biomassa/scopolamine/compare/v0.5.2...v0.5.3
