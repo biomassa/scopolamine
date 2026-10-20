@@ -7,6 +7,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-20
+
 ### Added
 
 - "Recently added" in the artist column, under "All artists". It shows the albums that you added in the last 30 days, newest first, or the 50 newest albums if you added none in the last 30 days. Each row shows the year, the artist, the title, and the added date, for example `3 days ago`. In the local mode, the date is the date that the scan first found the files. The first scan of a folder uses the modification time of the files.
@@ -179,7 +181,8 @@ License:
 
 - MIT license. Parts of the code come from vibez by Simone Pelosi (MIT license). NOTICE and THIRD_PARTY_LICENSES.md give the details.
 
-[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/biomassa/scopolamine/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/biomassa/scopolamine/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/biomassa/scopolamine/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/biomassa/scopolamine/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/biomassa/scopolamine/compare/v0.5.3...v0.5.4
