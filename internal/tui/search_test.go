@@ -160,6 +160,7 @@ func TestRemoveFromLibrary(t *testing.T) {
 	drive(m, m.Init())
 
 	// Library: Boards of Canada → Geogaddi, D asks, n cancels.
+	key(m, "j") // past Recently added
 	key(m, "j")
 	key(m, "tab")
 	key(m, "j")

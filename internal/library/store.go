@@ -120,7 +120,8 @@ CREATE TABLE IF NOT EXISTS tracks (
 CREATE TABLE IF NOT EXISTS local_files (
 	path  TEXT PRIMARY KEY,
 	mtime INTEGER NOT NULL,
-	size  INTEGER NOT NULL
+	size  INTEGER NOT NULL,
+	added INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS meta (
 	key   TEXT PRIMARY KEY,
@@ -201,6 +202,22 @@ func migrate(db *sql.DB) error {
 				if _, err := db.Exec(`DELETE FROM local_files`); err != nil {
 					return err
 				}
+			}
+		}
+	}
+	// The date a file was first seen (0.8.0). Files scanned before get
+	// their modification time.
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('local_files') WHERE name = 'added'`).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		for _, q := range []string{
+			`ALTER TABLE local_files ADD COLUMN added INTEGER NOT NULL DEFAULT 0`,
+			`UPDATE local_files SET added = mtime / 1000000000`,
+			localDatesSQL,
+		} {
+			if _, err := db.Exec(q); err != nil {
+				return err
 			}
 		}
 	}
@@ -435,6 +452,42 @@ ORDER BY artist_key, CASE WHEN year = 0 THEN 1 ELSE 0 END, year, title COLLATE N
 	})
 	if err != nil {
 		return nil, err
+	}
+	return albums, s.fillLocalFormats(ctx, albums)
+}
+
+// The recently added albums: those of the last RecentDays days, or, when
+// there are none, the RecentFallback newest.
+const (
+	RecentDays     = 30
+	RecentFallback = 50
+)
+
+// dateLayout is the layout of date_added.
+const dateLayout = "2006-01-02T15:04:05Z"
+
+// RecentAlbums lists the recently added albums of source, newest first.
+func (s *Store) RecentAlbums(ctx context.Context, source string, now time.Time) ([]Album, error) {
+	cutoff := now.UTC().AddDate(0, 0, -RecentDays).Format(dateLayout)
+	const order = ` ORDER BY date_added DESC, artist_key, title COLLATE NOCASE`
+	rows, err := s.db.QueryContext(ctx, `SELECT `+albumCols+` FROM albums
+WHERE source = ? AND date_added >= ?`+order, source, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	albums, err := scanAlbums(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(albums) == 0 {
+		rows, err := s.db.QueryContext(ctx, `SELECT `+albumCols+` FROM albums
+WHERE source = ? AND date_added != ''`+order+` LIMIT ?`, source, RecentFallback)
+		if err != nil {
+			return nil, err
+		}
+		if albums, err = scanAlbums(rows); err != nil {
+			return nil, err
+		}
 	}
 	return albums, s.fillLocalFormats(ctx, albums)
 }

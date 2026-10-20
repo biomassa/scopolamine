@@ -89,6 +89,16 @@ func (s *Store) UpdateLocal(ctx context.Context, changed []LocalFile, removed []
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// The first scan of a folder knows none of the old files: its files
+	// get their modification time as the date they were added. Later scans
+	// use the time they first see a file.
+	var known int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM local_files`).Scan(&known); err != nil {
+		return err
+	}
+	firstScan := known == len(removed)
+	now := time.Now().Unix()
+
 	// forget drops the tracks of a scan entry: an audio file's own track, or
 	// a cue sheet's tracks (whose path is the audio file, and cue_path the
 	// sheet).
@@ -113,6 +123,17 @@ func (s *Store) UpdateLocal(ctx context.Context, changed []LocalFile, removed []
 		return err
 	}
 	for _, f := range changed {
+		var added int64
+		err := tx.QueryRowContext(ctx, `SELECT added FROM local_files WHERE path = ?`, f.Path).Scan(&added)
+		switch {
+		case err == nil && added > 0: // a changed file keeps its date
+		case err != nil && err != sql.ErrNoRows:
+			return err
+		case firstScan:
+			added = f.Stamp.Mtime / int64(time.Second)
+		default:
+			added = now
+		}
 		if err := forget(f.Path); err != nil {
 			return err
 		}
@@ -136,14 +157,15 @@ func (s *Store) UpdateLocal(ctx context.Context, changed []LocalFile, removed []
 				return fmt.Errorf("library: local track %s: %w", t.ID, err)
 			}
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO local_files (path, mtime, size) VALUES (?,?,?)`,
-			f.Path, f.Stamp.Mtime, f.Stamp.Size); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO local_files (path, mtime, size, added) VALUES (?,?,?,?)`,
+			f.Path, f.Stamp.Mtime, f.Stamp.Size, added); err != nil {
 			return err
 		}
 	}
 	for _, q := range []string{
 		`DELETE FROM albums WHERE source = 'local' AND NOT EXISTS (SELECT 1 FROM tracks t WHERE t.album_id = albums.id)`,
 		`UPDATE albums SET track_count = (SELECT COUNT(*) FROM tracks t WHERE t.album_id = albums.id), tracks_synced_at = 1 WHERE source = 'local'`,
+		localDatesSQL,
 	} {
 		if _, err := tx.ExecContext(ctx, q); err != nil {
 			return err
@@ -151,6 +173,15 @@ func (s *Store) UpdateLocal(ctx context.Context, changed []LocalFile, removed []
 	}
 	return tx.Commit()
 }
+
+// localDatesSQL sets the date_added of each local album: the date its
+// first file was added. A cue track's file is its cue sheet.
+const localDatesSQL = `
+UPDATE albums SET date_added = COALESCE((
+	SELECT strftime('%Y-%m-%dT%H:%M:%SZ', MIN(lf.added), 'unixepoch')
+	FROM tracks t JOIN local_files lf ON lf.path = CASE WHEN t.cue_path != '' THEN t.cue_path ELSE t.path END
+	WHERE t.album_id = albums.id AND lf.added > 0), '')
+WHERE source = 'local'`
 
 // FolderArtists lists the top-level folders of the local library, with the
 // number of album folders in each (folder mode).
@@ -217,6 +248,51 @@ GROUP BY t.folder ORDER BY lower(t.folder)`
 	}
 	_ = rows.Close()
 	return out, s.fillLocalFormats(ctx, out)
+}
+
+// RecentFolderAlbums lists the recently added album folders, newest first
+// (folder mode). The date of a folder is the date its first file was added.
+func (s *Store) RecentFolderAlbums(ctx context.Context, now time.Time) ([]Album, error) {
+	all, err := s.FolderAlbums(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `
+SELECT t.folder, strftime('%Y-%m-%dT%H:%M:%SZ', MIN(lf.added), 'unixepoch')
+FROM tracks t JOIN albums a ON a.id = t.album_id
+JOIN local_files lf ON lf.path = CASE WHEN t.cue_path != '' THEN t.cue_path ELSE t.path END
+WHERE a.source = 'local' AND lf.added > 0 GROUP BY t.folder`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	dates := map[string]string{}
+	for rows.Next() {
+		var folder, date string
+		if err := rows.Scan(&folder, &date); err != nil {
+			return nil, err
+		}
+		dates[FolderPrefix+folder] = date
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	var dated []Album
+	for _, a := range all {
+		if a.DateAdded = dates[a.ID]; a.DateAdded != "" {
+			dated = append(dated, a)
+		}
+	}
+	sort.SliceStable(dated, func(i, j int) bool { return dated[i].DateAdded > dated[j].DateAdded })
+	cutoff := now.UTC().AddDate(0, 0, -RecentDays).Format(dateLayout)
+	n := 0
+	for n < len(dated) && dated[n].DateAdded >= cutoff {
+		n++
+	}
+	if n == 0 {
+		n = min(len(dated), RecentFallback)
+	}
+	return dated[:n], nil
 }
 
 // FolderTracks lists the tracks of an album folder in file order (folder

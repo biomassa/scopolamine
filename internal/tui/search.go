@@ -299,7 +299,7 @@ func (m *Model) addSelected() tea.Cmd {
 		if err != nil {
 			return addedMsg{catalogID: a.ID, err: err}
 		}
-		la := library.FromApple(lib)
+		la := addedAlbum(lib)
 		if err := store.UpsertAlbum(ctx, library.SourceApple, la); err != nil {
 			return addedMsg{catalogID: a.ID, err: err}
 		}
@@ -787,12 +787,23 @@ func (m *Model) addNext() tea.Cmd {
 		if err != nil {
 			return addedMsg{catalogID: a.ID, err: err, bulk: true}
 		}
-		la := library.FromApple(lib)
+		la := addedAlbum(lib)
 		if err := store.UpsertAlbum(ctx, library.SourceApple, la); err != nil {
 			return addedMsg{catalogID: a.ID, err: err, bulk: true}
 		}
 		return addedMsg{catalogID: a.ID, album: la, bulk: true}
 	})
+}
+
+// addedAlbum is the library album of an album that was just added. If
+// Apple Music gives no date, the date is now, so that the album shows at
+// the top of Recently added.
+func addedAlbum(lib applemusic.Album) library.Album {
+	la := library.FromApple(lib)
+	if la.DateAdded == "" {
+		la.DateAdded = time.Now().UTC().Format(time.RFC3339)
+	}
+	return la
 }
 
 // onBulkAdded records one result of the multiple add and adds the next

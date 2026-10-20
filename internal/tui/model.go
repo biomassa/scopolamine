@@ -23,9 +23,14 @@ const (
 )
 
 const (
-	allArtists = "All artists"
-	allAlbums  = "All albums"
+	allArtists    = "All artists"
+	recentlyAdded = "Recently added"
+	allAlbums     = "All albums"
 )
+
+// artistsOff is the number of rows above the first artist: "All artists"
+// and "Recently added".
+const artistsOff = 2
 
 // Deps is what the model needs from the outside world. Src and Player may be
 // nil (offline / playback unavailable); Player usually arrives later through
@@ -337,6 +342,10 @@ func (m *Model) loadAlbums(artist string) tea.Cmd {
 			err error
 		)
 		switch {
+		case folders && artist == recentlyAdded:
+			a, err = store.RecentFolderAlbums(m.ctx, time.Now())
+		case artist == recentlyAdded:
+			a, err = store.RecentAlbums(m.ctx, src, time.Now())
 		case folders && artist == allArtists:
 			a, err = store.FolderAlbums(m.ctx, "")
 		case folders:
@@ -646,13 +655,16 @@ func (m *Model) setArtists(a []library.Artist) tea.Cmd {
 		prev, m.wantArtist = m.wantArtist, ""
 	}
 	m.artists = a
-	labels := make([]string, 0, len(a)+1)
-	labels = append(labels, allArtists)
+	labels := make([]string, 0, len(a)+artistsOff)
+	labels = append(labels, allArtists, recentlyAdded)
 	want := 0
+	if prev == recentlyAdded {
+		want = 1
+	}
 	for i, ar := range a {
 		labels = append(labels, ar.Name)
 		if ar.Name == prev {
-			want = i + 1
+			want = i + artistsOff
 		}
 	}
 	m.panes[paneArtists].setItemsKeep(labels, want)
@@ -668,14 +680,16 @@ func (m *Model) setAlbums(artist string, a []library.Album) tea.Cmd {
 		prev, m.wantAlbum = m.wantAlbum, ""
 	}
 	m.albumsFor, m.albums = artist, a
-	want := 0 // "All albums"
+	want := 0 // "All albums", or the newest album of Recently added
 	labels := []string{}
 	if len(a) > 0 {
-		labels = append(labels, allAlbums)
-		labels = append(labels, albumLabels(a, artist == allArtists)...)
+		if m.albumsOff() > 0 {
+			labels = append(labels, allAlbums)
+		}
+		labels = append(labels, albumLabels(a, artist == allArtists || artist == recentlyAdded)...)
 		for i, al := range a {
 			if al.ID == prev {
-				want = i + 1
+				want = i + m.albumsOff()
 			}
 		}
 	}
@@ -688,8 +702,10 @@ func (m *Model) selectedArtist() string {
 	switch {
 	case i == 0:
 		return allArtists
-	case i > 0 && i-1 < len(m.artists):
-		return m.artists[i-1].Name
+	case i == 1:
+		return recentlyAdded
+	case i >= artistsOff && i-artistsOff < len(m.artists):
+		return m.artists[i-artistsOff].Name
 	}
 	return ""
 }
@@ -697,14 +713,23 @@ func (m *Model) selectedArtist() string {
 func (m *Model) albumsCurrent() bool { return m.albumsFor != "" && m.albumsFor == m.selectedArtist() }
 
 func (m *Model) allAlbumsSelected() bool {
-	return m.albumsCurrent() && len(m.albums) > 0 && m.panes[paneAlbums].selected() == 0
+	return m.albumsCurrent() && m.albumsOff() > 0 && len(m.albums) > 0 && m.panes[paneAlbums].selected() == 0
+}
+
+// albumsOff is the number of rows above the first album: "All albums", or
+// none for Recently added.
+func (m *Model) albumsOff() int {
+	if m.albumsFor == recentlyAdded {
+		return 0
+	}
+	return 1
 }
 
 func (m *Model) selectedAlbum() (library.Album, bool) {
 	if !m.albumsCurrent() {
 		return library.Album{}, false
 	}
-	i := m.panes[paneAlbums].selected() - 1
+	i := m.panes[paneAlbums].selected() - m.albumsOff()
 	if i < 0 || i >= len(m.albums) {
 		return library.Album{}, false
 	}
@@ -988,6 +1013,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch k {
 	case "L":
 		return m.switchMode()
+	case "r":
+		return m.jumpToRecent()
 	case "v":
 		if !local {
 			return nil
@@ -1278,7 +1305,7 @@ func (m *Model) jumpToAlbum(a library.Album, trackID string) tea.Cmd {
 	found := false
 	for i, ar := range m.artists {
 		if library.ArtistKey(ar.Name) == library.ArtistKey(a.Artist) {
-			ap.selectIndex(i + 1)
+			ap.selectIndex(i + artistsOff)
 			found = true
 			break
 		}
@@ -1297,7 +1324,7 @@ func (m *Model) jumpToAlbum(a library.Album, trackID string) tea.Cmd {
 	if artist == m.albumsFor {
 		for i, al := range m.albums {
 			if al.ID == a.ID {
-				m.panes[paneAlbums].selectIndex(i + 1)
+				m.panes[paneAlbums].selectIndex(i + m.albumsOff())
 			}
 		}
 		if cmd := m.albumChanged(); cmd != nil {
@@ -1310,6 +1337,23 @@ func (m *Model) jumpToAlbum(a library.Album, trackID string) tea.Cmd {
 	// Albums arrive asynchronously; setAlbums will select wantAlbum.
 	m.wantAlbum = a.ID
 	return m.loadAlbums(artist)
+}
+
+// jumpToRecent selects Recently added and puts the focus on its newest
+// album. The filters of the artist and album columns clear.
+func (m *Model) jumpToRecent() tea.Cmd {
+	ap := m.panes[paneArtists]
+	ap.setFilter("")
+	m.panes[paneAlbums].setFilter("")
+	if !ap.selectIndex(1) {
+		return nil // the artists are not loaded yet
+	}
+	m.focus = paneAlbums
+	if m.albumsFor == recentlyAdded {
+		m.panes[paneAlbums].home()
+		return m.albumChanged()
+	}
+	return m.artistChanged() // setAlbums selects the newest album
 }
 
 // quit fades the music out if it plays, and then quits.

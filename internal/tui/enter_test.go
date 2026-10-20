@@ -57,6 +57,7 @@ func TestEnterOnPausedAlbum(t *testing.T) {
 	m := New(context.Background(), Deps{Store: fixtureStore(t), Player: fp})
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 24})
 	drive(m, m.Init())
+	key(m, "j") // past Recently added
 	key(m, "j")
 	key(m, "tab")
 	key(m, "j")

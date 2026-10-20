@@ -7,6 +7,11 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Added
+
+- "Recently added" in the artist column, under "All artists". It shows the albums that you added in the last 30 days, newest first, or the 50 newest albums if you added none in the last 30 days. Each row shows the year, the artist, the title, and the added date, for example `3 days ago`. In the local mode, the date is the date that the scan first found the files. The first scan of a folder uses the modification time of the files.
+- `r` goes to Recently added, with the focus on the newest album. The legends show `r recent`.
+
 ## [0.7.0] - 2026-10-07
 
 ### Added

@@ -26,6 +26,7 @@ func TestAppleIdleStop(t *testing.T) {
 	m.Update(PlayerReadyMsg{})
 
 	// Play Geogaddi, then switch to local while it plays.
+	key(m, "j") // past Recently added
 	key(m, "j")
 	key(m, "tab")
 	key(m, "j")

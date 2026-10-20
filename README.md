@@ -10,6 +10,7 @@ scopolamine is a terminal program for [Apple Music](https://music.apple.com) and
 
 - Three columns: artists, albums, and tracks. Each column starts with an "All" row. "All albums" shows all the tracks of an artist, in groups by album.
 - Albums in date order, and a track number on each track.
+- "Recently added" shows the albums that you added in the last 30 days, newest first.
 - A full album plays as one queue. Thus the tracks follow each other without a new start for each track.
 - A fade-out of 0.2 seconds before a stop, a pause, a change of track, and the quit (`q`). A fade-in of 0.2 seconds after a pause.
 - Album covers at the bottom of the track column, in kitty and Ghostty.
@@ -104,6 +105,7 @@ To sign in with a different account, use `scopolamine logout` and then `scopolam
 | `+` `-`                | Change the volume.                                                                                                                                                                                                                         |
 | `x`                    | Stop.                                                                                                                                                                                                                                      |
 | `o`                    | Go to the album that plays.                                                                                                                                                                                                                |
+| `r`                    | Go to Recently added, on the newest album.                                                                                                                                                                                                 |
 | `L`                    | Switch between the Apple Music mode and the local mode.                                                                                                                                                                                    |
 | `v`                    | Local mode: sort by metadata or by folders.                                                                                                                                                                                                |
 | `F`                    | Local mode: set the music folder.                                                                                                                                                                                                          |
@@ -127,6 +129,18 @@ To sign in with a different account, use `scopolamine logout` and then `scopolam
 ### "All" rows
 
 The "All" rows use the accent color of the theme. They stay at the top of their columns, and the list under them scrolls. "All artists" shows all the albums. "All albums" shows all the tracks of the selected artist, in groups by album. `enter` on "All albums" or on "All" plays all these tracks. When you select "All artists", "All albums" shows no tracks. The reason: that list needs one request for each album in the library.
+
+### Recently added
+
+"Recently added" is the second row of the artist column, under "All artists". It has the accent color of the theme and stays at the top of the column.
+
+- The album column shows the albums that you added in the last 30 days, newest first. If you added no albums in the last 30 days, it shows the 50 albums that you added last.
+- Each album row shows the year, the artist, and the title. The date that you added the album shows at the right, in a pale color: `today`, `yesterday`, `3 days ago`, `2 weeks ago`, `5 months ago`, or `2 years ago`.
+- `r` goes to Recently added, with the focus on the newest album. It clears the filters of the artist and album columns.
+- This list has no "All albums" row. `enter` on an album plays it.
+- `o`, and the switch of mode, go to the album under its artist.
+- In the Apple Music mode, the date comes from Apple Music. An album that you add with `a` shows at the top immediately.
+- In the local mode, the date is the date that the scan first found the files of the album. The first scan of a folder uses the modification time of the files. A file that you change, for example with new tags, keeps its date. A file that you move or rename gets a new date. In the folder sort, the list shows the album folders.
 
 ### Search
 

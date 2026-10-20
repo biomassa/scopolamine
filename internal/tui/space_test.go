@@ -31,6 +31,7 @@ func newModesModel(t *testing.T) (*Model, *fakePlayer) {
 // playGeogaddi plays Geogaddi in the Apple Music mode, at 30 seconds of
 // track 1.
 func playGeogaddi(m *Model) {
+	key(m, "j") // past Recently added
 	key(m, "j")
 	key(m, "tab")
 	key(m, "j")
@@ -43,6 +44,7 @@ func playGeogaddi(m *Model) {
 func playEmbrace(m *Model) {
 	key(m, "1")
 	key(m, "g")
+	key(m, "j") // past Recently added
 	key(m, "j")
 	key(m, "tab")
 	key(m, "j")

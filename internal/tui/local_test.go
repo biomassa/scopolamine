@@ -48,6 +48,7 @@ func TestLocalMode(t *testing.T) {
 	}
 
 	// Apple view: pick Boards of Canada, then switch to local.
+	key(m, "j") // past Recently added
 	key(m, "j")
 	if !strings.Contains(screen(m), "Apple Music") || strings.Contains(screen(m), "Polwechsel") {
 		t.Fatalf("apple view:\n%s", screen(m))
@@ -64,6 +65,7 @@ func TestLocalMode(t *testing.T) {
 	}
 
 	// Album rows show their format at the right; the Apple rows have none.
+	key(m, "j") // past Recently added
 	key(m, "j") // Polwechsel
 	for _, l := range strings.Split(screen(m), "\n") {
 		if strings.Contains(l, "2023  Embrace") {
@@ -103,6 +105,7 @@ func TestLocalMode(t *testing.T) {
 		t.Fatalf("folder view:\n%s", s)
 	}
 	key(m, "1")
+	key(m, "j") // past Recently added
 	key(m, "j") // koptt
 	if !strings.Contains(screen(m), "Embrace") {
 		t.Fatalf("folder albums:\n%s", screen(m))

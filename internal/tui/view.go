@@ -74,14 +74,14 @@ func (m *Model) legendItems() []legendItem {
 		if m.deps.SetLocalRoot != nil {
 			items = append(items, legendItem{"F", "folder"})
 		}
-		return append(items, keys("L", "Apple Music", "o", "playing", "T", "theme", "?", "help")...)
+		return append(items, keys("L", "Apple Music", "r", "recent", "o", "playing", "T", "theme", "?", "help")...)
 	}
 	items := keys("enter", "play", "space", "pause", "[ ]", "track", "←/→", "seek", "+/-", "vol", "/", "filter",
 		"s", "search", "D", "remove")
 	if m.localAvailable() || m.deps.SetLocalRoot != nil {
 		items = append(items, legendItem{"L", "local"})
 	}
-	return append(items, keys("o", "playing", "T", "theme", "?", "help")...)
+	return append(items, keys("r", "recent", "o", "playing", "T", "theme", "?", "help")...)
 }
 
 // legendLines lays the legend items out on one line, or on two when they do
@@ -132,6 +132,40 @@ func albumLabels(a []library.Album, withArtist bool) []string {
 		out[i] = l
 	}
 	return out
+}
+
+// addedAgo is when an album was added, relative to now: "today",
+// "yesterday", "3 days ago", "2 weeks ago", "5 months ago", "2 years ago".
+// It counts calendar days in the local time zone.
+func addedAgo(date string, now time.Time) string {
+	t, err := time.Parse(time.RFC3339, date)
+	if err != nil {
+		return ""
+	}
+	day := func(t time.Time) time.Time {
+		y, mo, d := t.Local().Date()
+		return time.Date(y, mo, d, 0, 0, 0, 0, time.UTC)
+	}
+	days := int(day(now).Sub(day(t)).Hours() / 24)
+	ago := func(n int, unit string) string {
+		if n != 1 {
+			unit += "s"
+		}
+		return strconv.Itoa(n) + " " + unit + " ago"
+	}
+	switch {
+	case days <= 0:
+		return "today"
+	case days == 1:
+		return "yesterday"
+	case days < 14:
+		return ago(days, "day")
+	case days < 60:
+		return ago(days/7, "week")
+	case days < 365:
+		return ago(days/30, "month")
+	}
+	return ago(days/365, "year")
 }
 
 // trackNumbers formats each track's number as "7." (or "2-7." on multi-disc
@@ -310,14 +344,22 @@ func (m *Model) renderColumn(p *pane, w, h int, focused, filtering bool, empty s
 		return m.renderCell(c, w, mi == p.cursor, focused)
 	}
 
-	// The "All" row stays at the top, with an empty line under it; the list
-	// below scrolls on its own.
+	// The "All" rows stay at the top, with an empty line under them; the
+	// list below scrolls on its own.
+	pinned := 0
+	for pinned < len(p.match) && cellAt(p.match[pinned]).all {
+		pinned++
+	}
 	first, cursor := 0, p.cursor
-	if len(p.match) > 0 && avail >= 3 && cellAt(p.match[0]).all {
-		lines = append(lines, row(0), blank)
-		p.lineRows = append(p.lineRows, 0, -1)
-		avail -= 2
-		first, cursor = 1, p.cursor-1
+	if pinned > 0 && avail >= pinned+2 {
+		for i := range pinned {
+			lines = append(lines, row(i))
+			p.lineRows = append(p.lineRows, i)
+		}
+		lines = append(lines, blank)
+		p.lineRows = append(p.lineRows, -1)
+		avail -= pinned + 1
+		first, cursor = pinned, p.cursor-pinned
 	}
 	n := len(p.match) - first
 	off := p.offset
@@ -454,20 +496,25 @@ func (m *Model) renderPane(i, w, h int) []string {
 			}
 		}
 		cellAt = func(idx int) cell {
-			if idx == 0 {
-				return cell{left: allArtists, all: true}
+			if idx < artistsOff {
+				return cell{left: p.labels[idx], all: true}
 			}
-			a := m.artists[idx-1]
+			a := m.artists[idx-artistsOff]
 			return cell{left: a.Name, right: strconv.Itoa(a.AlbumCount),
 				playing: m.playingAlbum.ID != "" && library.ArtistKey(a.Name) == library.ArtistKey(m.playingAlbum.Artist)}
 		}
 	case paneAlbums:
 		cellAt = func(idx int) cell {
-			if idx == 0 {
+			off := m.albumsOff()
+			if idx < off {
 				return cell{left: p.labels[0], right: strconv.Itoa(len(m.albums)), all: true}
 			}
-			a := m.albums[idx-1]
-			return cell{left: p.labels[idx], right: a.Format, rightDim: true, playing: a.ID == m.playingAlbum.ID}
+			a := m.albums[idx-off]
+			right := a.Format
+			if m.albumsFor == recentlyAdded {
+				right = addedAgo(a.DateAdded, time.Now())
+			}
+			return cell{left: p.labels[idx], right: right, rightDim: true, playing: a.ID == m.playingAlbum.ID}
 		}
 	case paneTracks:
 		switch {
@@ -605,6 +652,7 @@ func (m *Model) renderHelp() string {
 		{"+  -", "volume"},
 		{"x", "stop"},
 		{"o", "jump to what is playing"},
+		{"r", "go to Recently added"},
 		{"R", "sync the Apple Music library, or scan the local folder"},
 		{"s", "search Apple Music (esc returns to the library)"},
 		{"a", "in search: add the album to your library"},

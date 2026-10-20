@@ -88,6 +88,7 @@ func TestCovers(t *testing.T) {
 		run(cmd)
 	}
 	run(m.Init())
+	press("j") // past Recently added
 	press("j") // Boards of Canada, "All albums": no cover
 	press("3")
 	press("j") // a track of the grouped list: still no cover

@@ -158,6 +158,7 @@ func TestBrowseAndPlay(t *testing.T) {
 
 	// Boards of Canada: "All albums" is selected, so Tracks lists every
 	// track grouped by album, oldest album first, numbered.
+	key(m, "j") // past Recently added
 	key(m, "j")
 	s = screen(m)
 	for _, want := range []string{"1998  Music Has the Right", "2002  Geogaddi", "All", "3 · 7:38", "1. Wildlife Analysis", "1. Ready Lets Go", "2. Music Is Math"} {
@@ -238,6 +239,7 @@ func TestSessionRestore(t *testing.T) {
 	m := New(context.Background(), Deps{Store: store, Player: fp})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
 	drive(m, m.Init())
+	key(m, "j")   // past Recently added
 	key(m, "j")   // Boards of Canada
 	key(m, "tab") // albums
 	key(m, "j")   // 1998
@@ -374,6 +376,7 @@ func TestUnavailableTracks(t *testing.T) {
 	m := New(ctx, Deps{Store: store, Player: fp})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
 	drive(m, m.Init())
+	key(m, "j") // past Recently added
 	key(m, "j") // Boards of Canada
 	if !strings.Contains(screen(m), "unavailable") {
 		t.Fatalf("unavailable track not marked:\n%s", screen(m))
@@ -475,12 +478,12 @@ func TestPinnedAllRow(t *testing.T) {
 		return out
 	}
 	c := col()
-	if c[1] != "" || c[2] != "All artists" || c[3] != "" || !strings.HasPrefix(c[4], "Artist 00") {
-		t.Fatalf("layout: %q", c[:5])
+	if c[1] != "" || c[2] != "All artists" || c[3] != "Recently added" || c[4] != "" || !strings.HasPrefix(c[5], "Artist 00") {
+		t.Fatalf("layout: %q", c[:6])
 	}
 	key(m, "G") // the last artist: the list scrolls, "All" stays
 	c = col()
-	if c[2] != "All artists" || !strings.Contains(strings.Join(c, "|"), "Artist 29") || strings.Contains(strings.Join(c, "|"), "Artist 00") {
+	if c[2] != "All artists" || c[3] != "Recently added" || !strings.Contains(strings.Join(c, "|"), "Artist 29") || strings.Contains(strings.Join(c, "|"), "Artist 00") {
 		t.Fatalf("after scrolling: %q", c)
 	}
 	key(m, "g") // back to "All"

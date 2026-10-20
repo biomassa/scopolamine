@@ -53,7 +53,7 @@ func TestMouse(t *testing.T) {
 	drive(m, m.Init())
 
 	// A click selects a row and focuses its column.
-	bx, by := at(t, m, "Boards of Canada", 0)
+	bx, by := at(t, m, "Boards of Canada  ", 0) // the artist row, not an album of All artists
 	click(m, bx, by)
 	if m.selectedArtist() != "Boards of Canada" || m.focus != paneArtists {
 		t.Fatalf("artist %q, focus %d", m.selectedArtist(), m.focus)
@@ -111,8 +111,8 @@ func TestMouse(t *testing.T) {
 
 	// The wheel moves the cursor of the column under the mouse.
 	ax, ay := at(t, m, "Broadcast", 0)
-	wheel(m, ax, ay, false) // up: from Boards of Canada to All artists
-	if m.selectedArtist() != allArtists || m.focus != paneArtists {
+	wheel(m, ax, ay, false) // up: from Boards of Canada to Recently added
+	if m.selectedArtist() != recentlyAdded || m.focus != paneArtists {
 		t.Fatalf("wheel: artist %q, focus %d", m.selectedArtist(), m.focus)
 	}
 
